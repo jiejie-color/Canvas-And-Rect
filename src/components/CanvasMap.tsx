@@ -20,9 +20,19 @@ interface Props {
   robot: Robot;
   baseGridSize?: number; // 单位：米
   sendMessage: (message: string) => void;
-  waypoints: Waypoint[]
+  waypoints: Waypoint[];
+  navigationStatus: {
+    current_x: number;
+    current_y: number;
+    distance_to_goal: number;
+    status: "navigating" | "arrived" | "completed";
+    target_theta: number;
+    target_x: number;
+    target_y: number;
+    waypoint_id: number;
+    waypoint_name: string;
+  }; // 新增导航状态属性
 }
-
 
 /**
  * Professional ROS Web Visualization Canvas
@@ -30,7 +40,14 @@ interface Props {
  *   - World(Map) frame, unit = meter
  *   - All render elements MUST use world -> canvas transform
  */
-const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }: Props) => {
+const CanvasMap = ({
+  mapData,
+  robot,
+  baseGridSize = 1,
+  waypoints,
+  sendMessage,
+  navigationStatus,
+}: Props) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -46,9 +63,9 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
     | { type: "empty" }
     | { type: "waypoint"; waypoint: Waypoint };
 
-  const [contextTarget, setContextTarget] =
-    useState<ContextTarget>({ type: "empty" });
-
+  const [contextTarget, setContextTarget] = useState<ContextTarget>({
+    type: "empty",
+  });
 
   const btnStyle: React.CSSProperties = {
     padding: "6px 12px",
@@ -71,11 +88,7 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
       y: -(cy - offset.y) / scale,
     };
   };
-  const hitTestWaypoint = (
-    cx: number,
-    cy: number,
-    r = 8
-  ): Waypoint | null => {
+  const hitTestWaypoint = (cx: number, cy: number, r = 8): Waypoint | null => {
     for (const p of waypoints) {
       const { x: px, y: py } = worldToCanvas(p.x, p.y);
       if (Math.hypot(px - cx, py - cy) <= r) {
@@ -97,6 +110,19 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
     drawRobot(ctx);
     drawOrigin(ctx);
     drawWaypoints(ctx);
+
+    // 绘制导航状态
+    // if (navigationStatus) {
+    //   ctx.save();
+    //   ctx.fillStyle = "#0000ff";
+    //   ctx.font = "14px sans-serif";
+    //   ctx.fillText(
+    //     `导航状态: ${navigationStatus.status} 导航点位: ${navigationStatus.waypoint_name}`,
+    //     20,
+    //     20
+    //   );
+    //   ctx.restore();
+    // }
   };
 
   const drawWaypoints = (ctx: CanvasRenderingContext2D) => {
@@ -115,7 +141,7 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
       ctx.fillText(p.name, cx + 8, cy - 8);
       ctx.restore();
     });
-  }
+  };
   /** Map layer */
   const drawMap = (ctx: CanvasRenderingContext2D) => {
     if (!mapData) return;
@@ -133,8 +159,7 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
         const wx = origin.position.x + x * resolution;
         // const wy =
         //   origin.position.y + (height - y - 1) * resolution;
-        const wy =
-          origin.position.y + y * resolution;
+        const wy = origin.position.y + y * resolution;
 
         const { x: cx, y: cy } = worldToCanvas(wx, wy);
 
@@ -188,7 +213,7 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
     if (!robot) return;
 
     const { x, y } = worldToCanvas(robot.x, robot.y);
-    const cy = y
+    const cy = y;
     const cx = x;
 
     ctx.save();
@@ -314,7 +339,7 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
 
   useEffect(() => {
     draw();
-  }, [mapData, robot, scale, offset, waypoints]);
+  }, [mapData, robot, scale, offset, waypoints, navigationStatus]);
 
   /** Right click context menu (professional map interaction) */
   const [contextMenu, setContextMenu] = useState<{
@@ -324,7 +349,6 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
     wx: number;
     wy: number;
   }>({ visible: false, x: 0, y: 0, wx: 0, wy: 0 });
-
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -337,10 +361,11 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
 
       const hit = hitTestWaypoint(cx, cy);
       canvas.style.cursor = hit ? "pointer" : "crosshair";
+      if (!hit) {
+        setContextMenu((m) => ({ ...m, visible: false }));
+      }
       setContextTarget(
-        hit
-          ? { type: "waypoint", waypoint: hit }
-          : { type: "empty" }
+        hit ? { type: "waypoint", waypoint: hit } : { type: "empty" }
       );
     };
 
@@ -356,7 +381,7 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
       canvas.removeEventListener("mouseleave", onLeave);
     };
   }, [scale, offset, waypoints]);
- 
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -368,7 +393,6 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
       const cx = e.clientX - rect.left;
       const cy = e.clientY - rect.top;
       const { x: wx, y: wy } = canvasToWorld(cx, cy);
-
 
       setContextMenu({
         visible: true,
@@ -392,7 +416,8 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
     };
   }, [scale, offset]);
 
-  const isValid = editingNode &&
+  const isValid =
+    editingNode &&
     editingNode!.name.trim().length > 0 &&
     Number.isFinite(editingNode!.x) &&
     Number.isFinite(editingNode!.y);
@@ -417,47 +442,68 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
               fontSize: 14,
             }}
           >
-            {contextTarget.type === "empty" ? <div
-              style={{ padding: "8px 14px", cursor: "pointer" }}
-              onClick={async () => {
-                setEditingNode({
-                  x: contextMenu.wx,
-                  y: contextMenu.wy,
-                  theta: robot.yaw,
-                  name: ""
-                });
-                setContextMenu((m) => ({ ...m, visible: false }));
-              }}
-            >
-              ➕ 添加节点
-            </div> : null}
-            {contextTarget.type === "waypoint" ? <> <div
-              style={{ padding: "8px 14px", cursor: "pointer" }}
-              onClick={async () => {
-                sendMessage(JSON.stringify({
-                  op: "call_service", id: `call_multi_navigate_${Date.now()}`, service: "/multi_navigate", args: {
-                    waypoint_ids: [contextTarget.waypoint.id]
-                  }
-                }));
-
-              }}
-            >
-              🧭 导航到此
-            </div>
+            {contextTarget.type === "empty" ? (
               <div
                 style={{ padding: "8px 14px", cursor: "pointer" }}
                 onClick={async () => {
-                  sendMessage(JSON.stringify({
-                    op: "call_service", id: `call_delete_waypoint_${Date.now()}`, service: "/delete_waypoint", args: {
-                      id: contextTarget.waypoint.id
-                    }
-                  }));
-                  sendMessage(JSON.stringify({ op: "call_service", id: `create_waypoint_${Date.now() + 1}`, service: "/list_waypoints", args: {} }));
+                  setEditingNode({
+                    x: contextMenu.wx,
+                    y: contextMenu.wy,
+                    theta: robot.yaw,
+                    name: "",
+                  });
+                  setContextMenu((m) => ({ ...m, visible: false }));
                 }}
               >
-                🧭 删除点位
-              </div></> : null}
-
+                ➕ 添加节点
+              </div>
+            ) : null}
+            {contextTarget.type === "waypoint" ? (
+              <>
+                <div
+                  style={{ padding: "8px 14px", cursor: "pointer" }}
+                  onClick={async () => {
+                    sendMessage(
+                      JSON.stringify({
+                        op: "call_service",
+                        id: `call_multi_navigate_${Date.now()}`,
+                        service: "/multi_navigate",
+                        args: {
+                          waypoint_ids: [contextTarget.waypoint.id],
+                        },
+                      })
+                    );
+                  }}
+                >
+                  🧭 导航到此
+                </div>
+                <div
+                  style={{ padding: "8px 14px", cursor: "pointer" }}
+                  onClick={async () => {
+                    sendMessage(
+                      JSON.stringify({
+                        op: "call_service",
+                        id: `call_delete_waypoint_${Date.now()}`,
+                        service: "/delete_waypoint",
+                        args: {
+                          id: contextTarget.waypoint.id,
+                        },
+                      })
+                    );
+                    sendMessage(
+                      JSON.stringify({
+                        op: "call_service",
+                        id: `create_waypoint_${Date.now() + 1}`,
+                        service: "/list_waypoints",
+                        args: {},
+                      })
+                    );
+                  }}
+                >
+                  🧭 删除点位
+                </div>
+              </>
+            ) : null}
           </div>
         )}
       </div>
@@ -488,7 +534,9 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
             <div style={{ marginBottom: 10, fontSize: 14 }}>x坐标</div>
             <input
               value={editingNode.x}
-              onChange={(e) => setEditingNode({ ...editingNode, x: Number(e.target.value) })}
+              onChange={(e) =>
+                setEditingNode({ ...editingNode, x: Number(e.target.value) })
+              }
               style={{
                 width: "100%",
                 padding: "4px 6px",
@@ -503,7 +551,38 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
             <div style={{ marginBottom: 10, fontSize: 14 }}>y坐标</div>
             <input
               value={editingNode.y}
-              onChange={(e) => setEditingNode({ ...editingNode, y: Number(e.target.value) })}
+              onChange={(e) =>
+                setEditingNode({ ...editingNode, y: Number(e.target.value) })
+              }
+              style={{
+                width: "100%",
+                padding: "4px 6px",
+                borderRadius: 4,
+                border: "1px solid #444",
+                background: "#2a2a2a",
+                color: "#fff",
+                outline: "none",
+                marginBottom: 10,
+              }}
+            />
+            <div style={{ marginBottom: 10, fontSize: 14 }}>theta</div>
+            <input
+              value={editingNode.theta}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const value = Number(raw);
+
+                if (Number.isNaN(value)) return;
+
+                const clampedTheta = Math.max(
+                  -Math.PI,
+                  Math.min(Math.PI, value)
+                );
+                setEditingNode({
+                  ...editingNode,
+                  theta: clampedTheta,
+                });
+              }}
               style={{
                 width: "100%",
                 padding: "4px 6px",
@@ -520,7 +599,9 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
             <input
               autoFocus
               value={editingNode.name}
-              onChange={(e) => setEditingNode({ ...editingNode, name: e.target.value })}
+              onChange={(e) =>
+                setEditingNode({ ...editingNode, name: e.target.value })
+              }
               style={{
                 width: "100%",
                 padding: "4px 6px",
@@ -532,17 +613,29 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && editingNode.name.trim()) {
-                  sendMessage(JSON.stringify({
-                    op: "call_service", id: `create_waypoint_${Date.now()}`, service: "/create_waypoint", args: {
-                      waypoint: {
-                        x: editingNode!.x,
-                        y: editingNode!.y,
-                        theta: robot.yaw,
-                        name: editingNode.name,
-                      }
-                    }
-                  }));
-                  sendMessage(JSON.stringify({ op: "call_service", id: `create_waypoint_${Date.now()}`, service: "/list_waypoints", args: {} }));
+                  sendMessage(
+                    JSON.stringify({
+                      op: "call_service",
+                      id: `create_waypoint_${Date.now()}`,
+                      service: "/create_waypoint",
+                      args: {
+                        waypoint: {
+                          x: editingNode!.x,
+                          y: editingNode!.y,
+                          theta: robot.yaw,
+                          name: editingNode.name,
+                        },
+                      },
+                    })
+                  );
+                  sendMessage(
+                    JSON.stringify({
+                      op: "call_service",
+                      id: `create_waypoint_${Date.now()}`,
+                      service: "/list_waypoints",
+                      args: {},
+                    })
+                  );
                   setEditingNode(null);
                 }
                 if (e.key === "Escape") {
@@ -559,26 +652,35 @@ const CanvasMap = ({ mapData, robot, baseGridSize = 1, waypoints, sendMessage }:
                 marginTop: 14,
               }}
             >
-              <button
-                onClick={() => setEditingNode(null)}
-                style={btnStyle}
-              >
+              <button onClick={() => setEditingNode(null)} style={btnStyle}>
                 取消
               </button>
               <button
                 disabled={!(editingNode && isValid)}
                 onClick={() => {
-                  sendMessage(JSON.stringify({
-                    op: "call_service", id: `create_waypoint_${Date.now()}`, service: "/create_waypoint", args: {
-                      waypoint: {
-                        x: editingNode.x,
-                        y: editingNode.y,
-                        theta: robot.yaw,
-                        name: editingNode.name,
-                      }
-                    }
-                  }));
-                  sendMessage(JSON.stringify({ op: "call_service", id: `create_waypoint_${Date.now() + 1}`, service: "/list_waypoints", args: {} }));
+                  sendMessage(
+                    JSON.stringify({
+                      op: "call_service",
+                      id: `create_waypoint_${Date.now()}`,
+                      service: "/create_waypoint",
+                      args: {
+                        waypoint: {
+                          x: editingNode.x,
+                          y: editingNode.y,
+                          theta: robot.yaw,
+                          name: editingNode.name,
+                        },
+                      },
+                    })
+                  );
+                  sendMessage(
+                    JSON.stringify({
+                      op: "call_service",
+                      id: `create_waypoint_${Date.now() + 1}`,
+                      service: "/list_waypoints",
+                      args: {},
+                    })
+                  );
                   setEditingNode(null);
                 }}
                 style={{
