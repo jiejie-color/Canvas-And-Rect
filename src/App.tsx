@@ -1,27 +1,20 @@
 import React, { useState } from "react"; // 添加React和useState导入
 import useWebSocket from "react-use-websocket";
-import CanvasMap from "./components/CanvasMap";
-export interface Waypoint {
-  id?: string;
-  x: number; // 世界坐标（米）
-  y: number;
-  theta: number;
-  name: string;
-}
+import CanvasMap from "./components/CanvasMap/index.tsx";
+import type { NavigationStatus, Waypoint } from "./type";
+import { Top } from "./components/Top/index.tsx";
+import { quaternionToYaw } from "./components/CanvasMap/utils/index.ts";
+
 function App() {
   // 矩形固定在世界坐标系
   const [mapData, setMapData] = useState(null); // 添加状态存储地图数据
   const [robot, setRobot] = useState({ x: 0, y: 0, yaw: 0 });
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
-  const [navigationStatus, setNavigationStatus] = useState(null); // 新增导航状态存储
-  function quaternionToYaw(q) {
-    return Math.atan2(
-      2 * (q.w * q.z + q.x * q.y),
-      1 - 2 * (q.y * q.y + q.z * q.z)
-    );
-  }
+  const [navigationStatus, setNavigationStatus] =
+    useState<NavigationStatus | null>(null); // 新增导航状态存储
+
   const { sendMessage, lastMessage, readyState } = useWebSocket(
-    "ws://192.168.18.53:9090",
+    "ws://192.168.0.152:9090",
     {
       onMessage: (event) => {
         try {
@@ -51,8 +44,7 @@ function App() {
       onError: (event) => {
         console.error("WebSocket error:", event);
       },
-      onOpen: (event) => {
-        console.log("WebSocket connection opened");
+      onOpen: () => {
         sendMessage(JSON.stringify({ op: "subscribe", topic: "/map" }));
         sendMessage(JSON.stringify({ op: "subscribe", topic: "/amcl_pose" }));
         sendMessage(
@@ -63,7 +55,6 @@ function App() {
             op: "call_service",
             id: "call_list_waypoints_1",
             service: "/list_waypoints",
-            args: {},
           })
         );
       },
@@ -72,53 +63,14 @@ function App() {
 
   return (
     <div style={{ width: "100%", height: "100%", background: "#f0f0f0" }}>
-      <div
-        style={{
-          position: "absolute",
-          top: 10,
-          textAlign: "center",
-          width: "100%",
-        }}
-      >
-        {navigationStatus
-          ? `导航状态: ${navigationStatus?.status} 导航点位: ${navigationStatus?.waypoint_name}`
-          : null}
-        {navigationStatus?.status === "navigating" ? (
-          <button
-            style={{
-              marginLeft: "10px",
-              padding: "6px 12px",
-              backgroundColor: "#444",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              transition: "backgroundColor 0.3s",
-            }}
-            onMouseOver={(e) => (e.target.style.backgroundColor = "#333")}
-            onMouseOut={(e) => (e.target.style.backgroundColor = "#444")}
-            onClick={() => {
-              sendMessage(
-                JSON.stringify({
-                  op: "call_service",
-                  service: "/pause_navigation",
-                  id: "pause_navigation",
-                })
-              );
-            }}
-          >
-            取消导航
-          </button>
-        ) : null}
-      </div>
+      <Top navigationStatus={navigationStatus} sendMessage={sendMessage}></Top>
+      {/* 传递地图数据给组件 */}
       <CanvasMap
         robot={robot}
         mapData={mapData}
         waypoints={waypoints}
         sendMessage={sendMessage}
-        navigationStatus={navigationStatus}
       />
-      {/* 传递地图数据给组件 */}
     </div>
   );
 }

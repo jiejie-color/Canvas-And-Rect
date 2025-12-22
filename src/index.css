@@ -6,7 +6,9 @@
 }
 
 /* 确保页面元素铺满全屏 */
-html, body, #root {
+html,
+body,
+#root {
   margin: 0;
   padding: 0;
   width: 100%;
@@ -152,11 +154,14 @@ a {
 
 /* 清除按钮默认样式 */
 button {
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
+  all: unset;
   font: inherit;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: none;
+  background: #444;
+  color: #fff;
+  cursor: pointer;
 }
 
 /* 清除输入框默认样式 */

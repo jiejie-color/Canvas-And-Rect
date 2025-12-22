@@ -1,37 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import type { Waypoint } from "../App";
+import type { MapMessage, NavigationStatus, Robot, Waypoint } from "../type";
+import type { SendMessage } from "react-use-websocket";
 
-interface Robot {
-  x: number; // 世界坐标米 (map frame)
-  y: number;
-  yaw: number; // 弧度
-}
-interface MapMessage {
-  info: {
-    width: number;
-    height: number;
-    resolution: number;
-    origin: { position: { x: number; y: number } };
-  };
-  data: number[];
-}
 interface Props {
   mapData: MapMessage | null;
   robot: Robot;
   baseGridSize?: number; // 单位：米
-  sendMessage: (message: string) => void;
+  sendMessage: SendMessage;
   waypoints: Waypoint[];
-  navigationStatus: {
-    current_x: number;
-    current_y: number;
-    distance_to_goal: number;
-    status: "navigating" | "arrived" | "completed";
-    target_theta: number;
-    target_x: number;
-    target_y: number;
-    waypoint_id: number;
-    waypoint_name: string;
-  }; // 新增导航状态属性
+  navigationStatus: NavigationStatus; // 新增导航状态属性
 }
 
 /**
@@ -53,6 +30,8 @@ const CanvasMap = ({
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const [scale, setScale] = useState(30); // px / meter
   const [offset, setOffset] = useState({ x: 0, y: 0 }); // canvas px
+  const [cursor, setCursor] = useState<string>(""); // canvas px
+  const [isSetWaypoint, setIsSetWaypoint] = useState<boolean>(false); // canvas px
 
   const [editingNode, setEditingNode] = useState<Waypoint | null>(null);
 
@@ -75,6 +54,7 @@ const CanvasMap = ({
     color: "#fff",
     cursor: "pointer",
   };
+
   /** world -> canvas */
   const worldToCanvas = (wx: number, wy: number) => {
     return {
@@ -110,19 +90,6 @@ const CanvasMap = ({
     drawRobot(ctx);
     drawOrigin(ctx);
     drawWaypoints(ctx);
-
-    // 绘制导航状态
-    // if (navigationStatus) {
-    //   ctx.save();
-    //   ctx.fillStyle = "#0000ff";
-    //   ctx.font = "14px sans-serif";
-    //   ctx.fillText(
-    //     `导航状态: ${navigationStatus.status} 导航点位: ${navigationStatus.waypoint_name}`,
-    //     20,
-    //     20
-    //   );
-    //   ctx.restore();
-    // }
   };
 
   const drawWaypoints = (ctx: CanvasRenderingContext2D) => {
@@ -157,8 +124,6 @@ const CanvasMap = ({
         ctx.fillStyle = v === 100 ? "#000" : v > 0 ? "#999" : "#fff";
 
         const wx = origin.position.x + x * resolution;
-        // const wy =
-        //   origin.position.y + (height - y - 1) * resolution;
         const wy = origin.position.y + y * resolution;
 
         const { x: cx, y: cy } = worldToCanvas(wx, wy);
@@ -292,9 +257,9 @@ const CanvasMap = ({
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
 
-      const mx = e.clientX;
-      const my = e.clientY;
-
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
       const newScale = e.deltaY < 0 ? scale * 1.1 : scale * 0.9;
 
       setOffset({
@@ -353,6 +318,11 @@ const CanvasMap = ({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    canvas.style.cursor = cursor;
+  }, [cursor]);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
     const onMouseMove = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
@@ -360,7 +330,14 @@ const CanvasMap = ({
       const cy = e.clientY - rect.top;
 
       const hit = hitTestWaypoint(cx, cy);
-      canvas.style.cursor = hit ? "pointer" : "crosshair";
+      if (!isSetWaypoint) {
+        if (hit) {
+          setCursor("pointer");
+        } else {
+          setCursor("");
+        }
+      }
+
       if (!hit) {
         setContextMenu((m) => ({ ...m, visible: false }));
       }
@@ -369,9 +346,7 @@ const CanvasMap = ({
       );
     };
 
-    const onLeave = () => {
-      canvas.style.cursor = "crosshair";
-    };
+    const onLeave = () => {};
 
     canvas.addEventListener("mousemove", onMouseMove);
     canvas.addEventListener("mouseleave", onLeave);
@@ -380,7 +355,7 @@ const CanvasMap = ({
       canvas.removeEventListener("mousemove", onMouseMove);
       canvas.removeEventListener("mouseleave", onLeave);
     };
-  }, [scale, offset, waypoints]);
+  }, [scale, offset, waypoints, isSetWaypoint]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -424,69 +399,297 @@ const CanvasMap = ({
 
   return (
     <>
-      <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
-        <canvas ref={canvasRef} style={{ cursor: "crosshair" }} />
-      </div>
-      <div>
-        {contextMenu.visible && (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            bottom: 10,
+            width: "100%",
+            textAlign: "center",
+          }}
+        >
+          <button
+            style={btnStyle}
+            onClick={() => {
+              setCursor("pointer");
+              setIsSetWaypoint((pre) => !pre);
+            }}
+          >
+            {isSetWaypoint ? "取消" : "设置点位"}
+          </button>
+        </div>
+        <div ref={containerRef} style={{ width: "100%", flex: 1 }}>
+          <canvas ref={canvasRef} style={{ cursor: "" }} />
+        </div>
+        <div>
+          {contextMenu.visible && (
+            <div
+              style={{
+                position: "fixed",
+                top: contextMenu.y,
+                left: contextMenu.x,
+                background: "#1f1f1f",
+                color: "#fff",
+                borderRadius: 4,
+                boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+                zIndex: 1000,
+                fontSize: 14,
+              }}
+            >
+              {contextTarget.type === "empty" ? (
+                <div
+                  style={{ padding: "8px 14px", cursor: "pointer" }}
+                  onClick={async () => {
+                    setEditingNode({
+                      x: contextMenu.wx,
+                      y: contextMenu.wy,
+                      theta: robot.yaw,
+                      name: "",
+                    });
+                    setContextMenu((m) => ({ ...m, visible: false }));
+                  }}
+                >
+                  ➕ 添加节点
+                </div>
+              ) : null}
+              {contextTarget.type === "waypoint" ? (
+                <>
+                  <div
+                    style={{ padding: "8px 14px", cursor: "pointer" }}
+                    onClick={async () => {
+                      sendMessage(
+                        JSON.stringify({
+                          op: "call_service",
+                          id: `call_multi_navigate_${Date.now()}`,
+                          service: "/multi_navigate",
+                          args: {
+                            waypoint_ids: [contextTarget.waypoint.id],
+                          },
+                        })
+                      );
+                    }}
+                  >
+                    🧭 导航到此
+                  </div>
+                  <div
+                    style={{ padding: "8px 14px", cursor: "pointer" }}
+                    onClick={async () => {
+                      sendMessage(
+                        JSON.stringify({
+                          op: "call_service",
+                          id: `call_delete_waypoint_${Date.now()}`,
+                          service: "/delete_waypoint",
+                          args: {
+                            id: contextTarget.waypoint.id,
+                          },
+                        })
+                      );
+                      sendMessage(
+                        JSON.stringify({
+                          op: "call_service",
+                          id: `create_waypoint_${Date.now() + 1}`,
+                          service: "/list_waypoints",
+                          args: {},
+                        })
+                      );
+                    }}
+                  >
+                    🧭 删除点位
+                  </div>
+                </>
+              ) : null}
+            </div>
+          )}
+        </div>
+        {editingNode && (
           <div
             style={{
               position: "fixed",
-              top: contextMenu.y,
-              left: contextMenu.x,
-              background: "#1f1f1f",
-              color: "#fff",
-              borderRadius: 4,
-              boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-              zIndex: 1000,
-              fontSize: 14,
+              inset: 0,
+              background: "rgba(0,0,0,0.35)",
+              zIndex: 2000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
+            onClick={() => setEditingNode(null)}
           >
-            {contextTarget.type === "empty" ? (
-              <div
-                style={{ padding: "8px 14px", cursor: "pointer" }}
-                onClick={async () => {
-                  setEditingNode({
-                    x: contextMenu.wx,
-                    y: contextMenu.wy,
-                    theta: robot.yaw,
-                    name: "",
-                  });
-                  setContextMenu((m) => ({ ...m, visible: false }));
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#1f1f1f",
+                color: "#fff",
+                borderRadius: 8,
+                padding: "16px 20px",
+                minWidth: 260,
+                boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
+              }}
+            >
+              <div style={{ marginBottom: 10, fontSize: 14 }}>x坐标</div>
+              <input
+                value={editingNode.x}
+                onChange={(e) =>
+                  setEditingNode({ ...editingNode, x: Number(e.target.value) })
+                }
+                style={{
+                  width: "100%",
+                  padding: "4px 6px",
+                  borderRadius: 4,
+                  border: "1px solid #444",
+                  background: "#2a2a2a",
+                  color: "#fff",
+                  outline: "none",
+                  marginBottom: 10,
                 }}
-              >
-                ➕ 添加节点
-              </div>
-            ) : null}
-            {contextTarget.type === "waypoint" ? (
-              <>
-                <div
-                  style={{ padding: "8px 14px", cursor: "pointer" }}
-                  onClick={async () => {
+              />
+              <div style={{ marginBottom: 10, fontSize: 14 }}>y坐标</div>
+              <input
+                value={editingNode.y}
+                onChange={(e) =>
+                  setEditingNode({ ...editingNode, y: Number(e.target.value) })
+                }
+                style={{
+                  width: "100%",
+                  padding: "4px 6px",
+                  borderRadius: 4,
+                  border: "1px solid #444",
+                  background: "#2a2a2a",
+                  color: "#fff",
+                  outline: "none",
+                  marginBottom: 10,
+                }}
+              />
+              <div style={{ marginBottom: 10, fontSize: 14 }}>方向（弧度）</div>
+              <input
+                value={editingNode.theta}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const value = Number(raw);
+
+                  if (Number.isNaN(value)) return;
+
+                  const clampedTheta = Math.max(
+                    -Math.PI,
+                    Math.min(Math.PI, value)
+                  );
+                  setEditingNode({
+                    ...editingNode,
+                    theta: clampedTheta,
+                  });
+                }}
+                style={{
+                  width: "100%",
+                  padding: "4px 6px",
+                  borderRadius: 4,
+                  border: "1px solid #444",
+                  background: "#2a2a2a",
+                  color: "#fff",
+                  outline: "none",
+                  marginBottom: 8,
+                }}
+              />
+              <input
+                type="range"
+                min={-Math.PI}
+                max={Math.PI}
+                step="0.01"
+                value={editingNode.theta}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setEditingNode({
+                    ...editingNode,
+                    theta: Math.max(-Math.PI, Math.min(Math.PI, value)),
+                  });
+                }}
+                style={{
+                  width: "100%",
+                  marginBottom: 10,
+                  cursor: "pointer",
+                }}
+              />
+              <div style={{ marginBottom: 10, fontSize: 14 }}>节点名称</div>
+
+              <input
+                autoFocus
+                value={editingNode.name}
+                onChange={(e) =>
+                  setEditingNode({ ...editingNode, name: e.target.value })
+                }
+                style={{
+                  width: "100%",
+                  padding: "4px 6px",
+                  borderRadius: 4,
+                  border: "1px solid #444",
+                  background: "#2a2a2a",
+                  color: "#fff",
+                  outline: "none",
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && editingNode.name.trim()) {
                     sendMessage(
                       JSON.stringify({
                         op: "call_service",
-                        id: `call_multi_navigate_${Date.now()}`,
-                        service: "/multi_navigate",
+                        id: `create_waypoint_${Date.now()}`,
+                        service: "/create_waypoint",
                         args: {
-                          waypoint_ids: [contextTarget.waypoint.id],
+                          waypoint: {
+                            x: editingNode!.x,
+                            y: editingNode!.y,
+                            theta: editingNode.theta,
+                            name: editingNode.name,
+                          },
                         },
                       })
                     );
-                  }}
-                >
-                  🧭 导航到此
-                </div>
-                <div
-                  style={{ padding: "8px 14px", cursor: "pointer" }}
-                  onClick={async () => {
                     sendMessage(
                       JSON.stringify({
                         op: "call_service",
-                        id: `call_delete_waypoint_${Date.now()}`,
-                        service: "/delete_waypoint",
+                        id: `create_waypoint_${Date.now()}`,
+                        service: "/list_waypoints",
+                        args: {},
+                      })
+                    );
+                    setEditingNode(null);
+                  }
+                  if (e.key === "Escape") {
+                    setEditingNode(null);
+                  }
+                }}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 8,
+                  marginTop: 14,
+                }}
+              >
+                <button onClick={() => setEditingNode(null)} style={btnStyle}>
+                  取消
+                </button>
+                <button
+                  disabled={!(editingNode && isValid)}
+                  onClick={() => {
+                    sendMessage(
+                      JSON.stringify({
+                        op: "call_service",
+                        id: `create_waypoint_${Date.now()}`,
+                        service: "/create_waypoint",
                         args: {
-                          id: contextTarget.waypoint.id,
+                          waypoint: {
+                            x: editingNode.x,
+                            y: editingNode.y,
+                            theta: editingNode.theta,
+                            name: editingNode.name,
+                          },
                         },
                       })
                     );
@@ -498,203 +701,21 @@ const CanvasMap = ({
                         args: {},
                       })
                     );
+                    setEditingNode(null);
+                  }}
+                  style={{
+                    ...btnStyle,
+                    background: "#1677ff",
+                    opacity: editingNode.name.trim() ? 1 : 0.5,
                   }}
                 >
-                  🧭 删除点位
-                </div>
-              </>
-            ) : null}
+                  确认
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
-      {editingNode && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          onClick={() => setEditingNode(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "#1f1f1f",
-              color: "#fff",
-              borderRadius: 8,
-              padding: "16px 20px",
-              minWidth: 260,
-              boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
-            }}
-          >
-            <div style={{ marginBottom: 10, fontSize: 14 }}>x坐标</div>
-            <input
-              value={editingNode.x}
-              onChange={(e) =>
-                setEditingNode({ ...editingNode, x: Number(e.target.value) })
-              }
-              style={{
-                width: "100%",
-                padding: "4px 6px",
-                borderRadius: 4,
-                border: "1px solid #444",
-                background: "#2a2a2a",
-                color: "#fff",
-                outline: "none",
-                marginBottom: 10,
-              }}
-            />
-            <div style={{ marginBottom: 10, fontSize: 14 }}>y坐标</div>
-            <input
-              value={editingNode.y}
-              onChange={(e) =>
-                setEditingNode({ ...editingNode, y: Number(e.target.value) })
-              }
-              style={{
-                width: "100%",
-                padding: "4px 6px",
-                borderRadius: 4,
-                border: "1px solid #444",
-                background: "#2a2a2a",
-                color: "#fff",
-                outline: "none",
-                marginBottom: 10,
-              }}
-            />
-            <div style={{ marginBottom: 10, fontSize: 14 }}>theta</div>
-            <input
-              value={editingNode.theta}
-              onChange={(e) => {
-                const raw = e.target.value;
-                const value = Number(raw);
-
-                if (Number.isNaN(value)) return;
-
-                const clampedTheta = Math.max(
-                  -Math.PI,
-                  Math.min(Math.PI, value)
-                );
-                setEditingNode({
-                  ...editingNode,
-                  theta: clampedTheta,
-                });
-              }}
-              style={{
-                width: "100%",
-                padding: "4px 6px",
-                borderRadius: 4,
-                border: "1px solid #444",
-                background: "#2a2a2a",
-                color: "#fff",
-                outline: "none",
-                marginBottom: 10,
-              }}
-            />
-            <div style={{ marginBottom: 10, fontSize: 14 }}>节点名称</div>
-
-            <input
-              autoFocus
-              value={editingNode.name}
-              onChange={(e) =>
-                setEditingNode({ ...editingNode, name: e.target.value })
-              }
-              style={{
-                width: "100%",
-                padding: "4px 6px",
-                borderRadius: 4,
-                border: "1px solid #444",
-                background: "#2a2a2a",
-                color: "#fff",
-                outline: "none",
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && editingNode.name.trim()) {
-                  sendMessage(
-                    JSON.stringify({
-                      op: "call_service",
-                      id: `create_waypoint_${Date.now()}`,
-                      service: "/create_waypoint",
-                      args: {
-                        waypoint: {
-                          x: editingNode!.x,
-                          y: editingNode!.y,
-                          theta: robot.yaw,
-                          name: editingNode.name,
-                        },
-                      },
-                    })
-                  );
-                  sendMessage(
-                    JSON.stringify({
-                      op: "call_service",
-                      id: `create_waypoint_${Date.now()}`,
-                      service: "/list_waypoints",
-                      args: {},
-                    })
-                  );
-                  setEditingNode(null);
-                }
-                if (e.key === "Escape") {
-                  setEditingNode(null);
-                }
-              }}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-                marginTop: 14,
-              }}
-            >
-              <button onClick={() => setEditingNode(null)} style={btnStyle}>
-                取消
-              </button>
-              <button
-                disabled={!(editingNode && isValid)}
-                onClick={() => {
-                  sendMessage(
-                    JSON.stringify({
-                      op: "call_service",
-                      id: `create_waypoint_${Date.now()}`,
-                      service: "/create_waypoint",
-                      args: {
-                        waypoint: {
-                          x: editingNode.x,
-                          y: editingNode.y,
-                          theta: robot.yaw,
-                          name: editingNode.name,
-                        },
-                      },
-                    })
-                  );
-                  sendMessage(
-                    JSON.stringify({
-                      op: "call_service",
-                      id: `create_waypoint_${Date.now() + 1}`,
-                      service: "/list_waypoints",
-                      args: {},
-                    })
-                  );
-                  setEditingNode(null);
-                }}
-                style={{
-                  ...btnStyle,
-                  background: "#1677ff",
-                  opacity: editingNode.name.trim() ? 1 : 0.5,
-                }}
-              >
-                确认
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };
