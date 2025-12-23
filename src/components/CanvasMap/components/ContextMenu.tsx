@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
-import type { ContextTarget, Coordinate, Offset } from "../types";
+import type { ContextTarget, WaypointEditState } from "../types";
 import { hitTestWaypoint } from "../utils/hitTest";
 import type { Waypoint } from "../../../type";
 import type { SendMessage } from "react-use-websocket";
+import type { Coord } from "../hooks/usePanZoom";
 interface Props {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   waypoints: Waypoint[];
-  coord: Coordinate;
+  coord: Coord;
   setEditingNode: (node: Waypoint | null) => void;
   sendMessage: SendMessage;
-  scale: number;
-  offset: Offset;
-  isSetWaypoint: boolean;
+  // isSetWaypoint: boolean;
+  waypointEditState: WaypointEditState;
   setIsEditingNode: (isEditing: boolean) => void;
 }
 export const ContextMenu = ({
@@ -19,9 +19,8 @@ export const ContextMenu = ({
   waypoints,
   coord,
   sendMessage,
-  scale,
-  offset,
-  isSetWaypoint,
+  // isSetWaypoint,
+  waypointEditState,
   setEditingNode,
   setIsEditingNode,
 }: Props) => {
@@ -68,7 +67,7 @@ export const ContextMenu = ({
       canvas.removeEventListener("contextmenu", onContextMenu);
       window.removeEventListener("click", onClick);
     };
-  }, [scale, offset, canvasRef, coord]);
+  }, [canvasRef, coord]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -80,7 +79,7 @@ export const ContextMenu = ({
       const cy = e.clientY - rect.top;
 
       const hit = hitTestWaypoint(cx, cy, waypoints, coord.worldToCanvas);
-      if (!isSetWaypoint) {
+      if (waypointEditState === "drag") {
         if (hit) {
           canvas.style.cursor = "pointer";
         } else {
@@ -97,7 +96,7 @@ export const ContextMenu = ({
 
     canvas.addEventListener("mousemove", move);
     return () => canvas.removeEventListener("mousemove", move);
-  }, [waypoints, canvasRef, coord, isSetWaypoint]);
+  }, [waypoints, canvasRef, coord, waypointEditState]);
 
   return (
     <>

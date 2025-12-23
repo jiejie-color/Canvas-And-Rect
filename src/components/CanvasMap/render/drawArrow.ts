@@ -1,12 +1,14 @@
-import type { Coordinate } from "../types";
+import type { Waypoint } from "../../../type";
+import type { Coord } from "../hooks/usePanZoom";
 
 export const drawArrow = (
   ctx: CanvasRenderingContext2D,
-  wx: number,
-  wy: number,
-  theta: number,
-  coord: Coordinate
+  editingNode: Waypoint | null,
+  coord: Coord
 ) => {
+  if (!editingNode) return;
+
+  const { x: wx, y: wy, theta } = editingNode;
   const { x: cx, y: cy } = coord.worldToCanvas(wx, wy);
   const len = 30;
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CanvasMapProps } from "./types";
+import type { CanvasMapProps, WaypointEditState } from "./types";
 import { useCanvasInit } from "./hooks/useCanvasInit";
 import { usePanZoom } from "./hooks/usePanZoom";
 import { drawMap } from "./render/drawMap";
@@ -15,42 +15,34 @@ import { drawArrow } from "./render/drawArrow";
 const CanvasMap = (props: CanvasMapProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isSetWaypoint, setIsSetWaypoint] = useState<boolean>(false); // canvas px
+  const [waypointEditState, setWaypointEditState] = useState<WaypointEditState>("drag");
   const [editingNode, setEditingNode] = useState<Waypoint | null>(null);
   const [isEditingNode, setIsEditingNode] = useState<boolean>(false);
-  const { scale, offset, setScale, setOffset, coord } = usePanZoom(
+  const { view, coord } = usePanZoom(
     canvasRef,
-    isSetWaypoint,
+    waypointEditState,
+    setWaypointEditState,
     setEditingNode,
-    setIsSetWaypoint,
-    editingNode,
-    setIsEditingNode
+    setIsEditingNode,
+    props.mapData
   );
-  const { ctxRef } = useCanvasInit(
-    canvasRef,
-    containerRef,
-    props.mapData,
-    setScale,
-    setOffset
-  );
+  const { ctxRef } = useCanvasInit(canvasRef, containerRef);
   useEffect(() => {
     const ctx = ctxRef.current;
     if (!ctx || !props.mapData) return;
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    drawMap(ctx, props.mapData, coord.worldToCanvas, scale);
+    drawMap(ctx, props.mapData, coord.worldToCanvas, view.scale);
     drawGrid(
       ctx,
       props.mapData,
       coord.worldToCanvas,
-      scale,
+      view.scale,
       props.baseGridSize
     );
-    drawRobot(ctx, props.robot, coord.worldToCanvas, scale);
+    drawRobot(ctx, props.robot, coord.worldToCanvas, view.scale);
     drawWaypoints(ctx, props.waypoints, coord.worldToCanvas);
-    if (editingNode) {
-      drawArrow(ctx, editingNode.x, editingNode.y, editingNode.theta, coord);
-    }
-  }, [props, scale, offset, ctxRef, coord, editingNode]);
+    drawArrow(ctx, editingNode, coord);
+  }, [props, view, ctxRef, coord, editingNode]);
 
   return (
     <>
@@ -63,9 +55,7 @@ const CanvasMap = (props: CanvasMapProps) => {
         coord={coord}
         setEditingNode={setEditingNode}
         sendMessage={props.sendMessage}
-        scale={scale}
-        offset={offset}
-        isSetWaypoint={isSetWaypoint}
+        waypointEditState={waypointEditState}
         setIsEditingNode={setIsEditingNode}
       ></ContextMenu>
       {isEditingNode ? (
@@ -79,8 +69,8 @@ const CanvasMap = (props: CanvasMapProps) => {
 
       <Bottom
         canvasRef={canvasRef}
-        isSetWaypoint={isSetWaypoint}
-        setIsSetWaypoint={setIsSetWaypoint}
+        waypointEditState={waypointEditState}
+        setWaypointEditState={setWaypointEditState}
       ></Bottom>
     </>
   );

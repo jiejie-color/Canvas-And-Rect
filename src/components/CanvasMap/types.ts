@@ -17,7 +17,4 @@ export type ContextTarget =
   | { type: "empty" }
   | { type: "waypoint"; waypoint: Waypoint };
 
-export interface Coordinate {
-  worldToCanvas: (wx: number, wy: number) => Offset;
-  canvasToWorld: (cx: number, cy: number) => Offset;
-}
+export type WaypointEditState = "drag" | "addPoint" | "rotating"; // 拖动确定朝向

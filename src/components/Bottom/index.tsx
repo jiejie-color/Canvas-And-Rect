@@ -1,11 +1,13 @@
+import type { WaypointEditState } from "../CanvasMap/types";
+
 export const Bottom = ({
   canvasRef,
-  isSetWaypoint,
-  setIsSetWaypoint,
+  setWaypointEditState,
+  waypointEditState,
 }: {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
-  isSetWaypoint: boolean;
-  setIsSetWaypoint: React.Dispatch<React.SetStateAction<boolean>>;
+  setWaypointEditState: React.Dispatch<React.SetStateAction<WaypointEditState>>;
+  waypointEditState: WaypointEditState;
 }) => {
   return (
     <>
@@ -19,20 +21,21 @@ export const Bottom = ({
       >
         <button
           onClick={() => {
-            setIsSetWaypoint((pre) => {
+            setWaypointEditState((pre) => {
               const canvas = canvasRef.current;
+              const res = pre === "drag" ? "addPoint" : "drag";
               if (canvas) {
-                if (pre) {
+                if (res === "drag") {
                   canvas.style.cursor = "";
                 } else {
                   canvas.style.cursor = "pointer";
                 }
               }
-              return !pre;
+              return res;
             });
           }}
         >
-          {isSetWaypoint ? "取消" : "添加节点"}
+          {waypointEditState === "drag" ? "添加节点" : "取消"}
         </button>
       </div>
     </>
