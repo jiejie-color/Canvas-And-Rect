@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MapMessage, MySendMessage, Waypoint } from "../../../type";
+import type { MySendMessage, Waypoint } from "../../../type";
 import type { Offset, OperatingState } from "../types";
 import { getMouseCanvasPos, getTouchCanvasPos, getClientPos } from "../utils";
+import { INITIAL_POSE_SERVICE } from "../../../hooks/topic";
+import type { Map_Message } from "../../../type/topicRespon";
 
 export interface Coord {
   worldToCanvas: (wx: number, wy: number) => Offset;
@@ -18,7 +20,7 @@ export const usePanZoom = (
   setOperatingState: React.Dispatch<React.SetStateAction<OperatingState>>,
   setEditingNode: React.Dispatch<React.SetStateAction<Waypoint | null>>,
   setIsEditingNode: React.Dispatch<React.SetStateAction<boolean>>,
-  mapData: MapMessage | null,
+  mapData: Map_Message | null,
   sendMessage: MySendMessage,
   editingNode: Waypoint | null,
   setMapRotation: React.Dispatch<React.SetStateAction<number>>,
@@ -244,7 +246,7 @@ export const usePanZoom = (
     [canvasRef, operatingState, mapRotation, setEditingNode, coord, setMapRotation, setFreePoints]
   );
   const worldToMapIndex = useCallback((wx: number, wy: number) => {
-    const { resolution, origin, width, height } = mapData!.info;
+    const { resolution, origin, width, height } = mapData!.msg.info;
 
     const mx = Math.floor((wx - origin.position.x) / resolution);
     const my = Math.floor((wy - origin.position.y) / resolution);
@@ -324,7 +326,7 @@ export const usePanZoom = (
         setOperatingState("");
         sendMessage({
           op: "call_service",
-          service: "/initial_pose_service",
+          service: INITIAL_POSE_SERVICE,
           args: {
             x: editingNode!.x,
             y: editingNode!.y,
@@ -379,7 +381,7 @@ export const usePanZoom = (
     if (!mapData || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
-    const { width, height, resolution, origin } = mapData.info;
+    const { width, height, resolution, origin } = mapData.msg.info;
 
     const canvasW = canvas.clientWidth;
     const canvasH = canvas.clientHeight;

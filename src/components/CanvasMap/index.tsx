@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CanvasMapProps, OperatingState } from "./types";
+import type { OperatingState } from "./types";
 import { useCanvasInit } from "./hooks/useCanvasInit";
 import { usePanZoom } from "./hooks/usePanZoom";
 import { drawMap } from "./render/drawMap";
@@ -15,16 +15,11 @@ import { drawArrow } from "./render/drawArrow";
 import { drawLaserScan } from "./render/drawLaserScan";
 import { RobotControls } from "../RobotControls";
 import { drawFreePoints } from "./render/drawFreePoints";
+import { useWebSocketContext } from "../../hooks/useWebSocket";
+import { useGetData } from "./useGetData";
+import { Top } from "../Top";
 
-const CanvasMap = ({
-  sendMessage,
-  mapData,
-  projected_map,
-  robot,
-  laserScan,
-  waypoints,
-  pathPlan, // 接收路径规划数据
-}: CanvasMapProps) => {
+const CanvasMap = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [operatingState, setOperatingState] =
@@ -37,7 +32,8 @@ const CanvasMap = ({
   const [isPlan, setIsPlan] = useState<boolean>(false);
   const [isRobotControls, setIsRobotControls] = useState<boolean>(false);
   const [freePoints, setFreePoints] = useState<{ x: number; y: number }[]>([]);
-
+  const { sendMessage, } = useWebSocketContext();
+  const { mapData, robot, projected_map, waypoints, laserScan, plan, } = useGetData();
 
   const { view, coord } = usePanZoom(
     canvasRef,
@@ -71,7 +67,7 @@ const CanvasMap = ({
     }
     if (mode === "navigation") {
       drawWaypoints(ctx, waypoints, coord.worldToCanvas, mapRotation);
-      drawPath(ctx, pathPlan, coord.worldToCanvas); // 绘制路径规划
+      drawPath(ctx, plan, coord.worldToCanvas); // 绘制路径规划
       if (operatingState === "addPoint" || operatingState === "setInitialPose") {
         drawArrow(ctx, editingNode, coord);
       }
@@ -81,10 +77,11 @@ const CanvasMap = ({
     }
 
     ctx.restore();
-  }, [mapData, projected_map, robot, laserScan, waypoints, pathPlan, view, ctxRef, coord, editingNode, operatingState, mode, mapRotation, isLaser, freePoints]);
+  }, [mapData, projected_map, robot, laserScan, waypoints, plan, view, ctxRef, coord, editingNode, operatingState, mode, mapRotation, isLaser, freePoints]);
 
   return (
     <>
+      <Top></Top>
       <div ref={containerRef} style={{ width: "100vw", height: "100vh", backgroundColor: "#303030" }}>
         <canvas ref={canvasRef} />
       </div>
@@ -113,14 +110,13 @@ const CanvasMap = ({
         setMode={setMode}
         setIsLaser={setIsLaser}
         isLaser={isLaser}
-        sendMessage={sendMessage}
         isPlan={isPlan}
         setIsPlan={setIsPlan}
         isRobotControls={isRobotControls}
         setIsRobotControls={setIsRobotControls}
       ></Bottom>
       {isRobotControls ? <RobotControls></RobotControls> : null}
-      
+
     </>
   );
 };

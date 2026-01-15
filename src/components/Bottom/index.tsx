@@ -1,5 +1,7 @@
 import type { OperatingState } from "../CanvasMap/types";
-import type { Mode, MySendMessage } from "../../type";
+import type { Mode, } from "../../type";
+import { useWebSocketContext } from "../../hooks/useWebSocket";
+import { CONTROL_LAUNCH_SERVICE, MAP_SAVE_SERVICE, PLAN_TOPIC, PROJECTED_MAP_TOPIC, SCAN_TOPIC } from "../../hooks/topic";
 
 export const Bottom = ({
   canvasRef,
@@ -9,7 +11,6 @@ export const Bottom = ({
   setMode,
   setIsLaser,
   isLaser,
-  sendMessage,
   isPlan,
   setIsPlan,
   isRobotControls,
@@ -22,12 +23,12 @@ export const Bottom = ({
   setMode: React.Dispatch<React.SetStateAction<Mode>>;
   setIsLaser: React.Dispatch<React.SetStateAction<boolean>>;
   isLaser: boolean;
-  sendMessage: MySendMessage;
   isPlan: boolean;
   setIsPlan: React.Dispatch<React.SetStateAction<boolean>>;
   isRobotControls: boolean;
   setIsRobotControls: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
+  const { sendMessage, } = useWebSocketContext();
   return (
     <>
       <div
@@ -110,18 +111,18 @@ export const Bottom = ({
               sendMessage(
                 ({
                   op: "call_service",
-                  service: "/control_launch",
+                  service: CONTROL_LAUNCH_SERVICE,
                   args: {
                     launch_type: "mapping",
                     action: "start",
                     package_name: "car_vel"
                   },
-                  id: "control_launch"
+                  id: CONTROL_LAUNCH_SERVICE
                 })
               )
               setTimeout(() => {
                 sendMessage(
-                  { op: "subscribe", topic: "/projected_map", id: "projected_map" }
+                  { op: "subscribe", topic: PROJECTED_MAP_TOPIC, id: PROJECTED_MAP_TOPIC }
                 );
               }, 3000);
 
@@ -138,7 +139,7 @@ export const Bottom = ({
                   (
                     {
                       op: "subscribe",
-                      topic: "/plan",
+                      topic: PLAN_TOPIC,
                       throttle_rate: 100, // ms，10Hz
                     }
                   )
@@ -148,7 +149,7 @@ export const Bottom = ({
                   (
                     {
                       op: "unsubscribe",
-                      topic: "/plan",
+                      topic: PLAN_TOPIC,
                     }
                   )
                 );
@@ -168,7 +169,7 @@ export const Bottom = ({
                   (
                     {
                       op: "subscribe",
-                      topic: "/scan",
+                      topic: SCAN_TOPIC,
                       throttle_rate: 100, // ms，10Hz
                     }
                   )
@@ -178,7 +179,7 @@ export const Bottom = ({
                   (
                     {
                       op: "unsubscribe",
-                      topic: "/scan",
+                      topic: SCAN_TOPIC,
                     }
                   )
                 );
@@ -219,13 +220,13 @@ export const Bottom = ({
                 sendMessage(
                   ({
                     op: "call_service",
-                    service: "/control_launch",
+                    service: CONTROL_LAUNCH_SERVICE,
                     args: {
                       launch_type: "car_vel",
                       action: "restart",
                       package_name: "car_vel"
                     },
-                    id: "control_launch"
+                    id: CONTROL_LAUNCH_SERVICE
                   })
                 )
               }
@@ -244,7 +245,7 @@ export const Bottom = ({
                 sendMessage(
                   {
                     op: "call_service",
-                    service: "/control_launch",
+                    service: CONTROL_LAUNCH_SERVICE,
                     id: "map_save_service",
                     args: {
                       launch_type: "mapping",
@@ -254,8 +255,18 @@ export const Bottom = ({
                   }
                 )
                 sendMessage(
-                  { op: "unsubscribe", topic: "/projected_map", id: "projected_map" }
+                  { op: "unsubscribe", topic: PROJECTED_MAP_TOPIC, id: PROJECTED_MAP_TOPIC }
                 );
+                sendMessage({
+                  op: "call_service",
+                  service: CONTROL_LAUNCH_SERVICE,
+                  args: {
+                    launch_type: "car_vel",
+                    action: "start",
+                    package_name: "car_vel"
+                  },
+                  id: CONTROL_LAUNCH_SERVICE
+                });
               }}
             >
               {"导航模式"}
@@ -266,13 +277,13 @@ export const Bottom = ({
                 const mapName = prompt("请输入地图名称:", "地图_" + new Date().toISOString().slice(0, 10));
                 if (mapName !== null) {
                   sendMessage(
-                    { op: "unsubscribe", topic: "/projected_map", id: "projected_map" }
+                    { op: "unsubscribe", topic: PROJECTED_MAP_TOPIC, id: PROJECTED_MAP_TOPIC }
                   );
                   sendMessage(
                     ({
                       op: "call_service",
-                      service: "/map_save_service",
-                      id: "map_save_service",
+                      service: MAP_SAVE_SERVICE,
+                      id: MAP_SAVE_SERVICE,
                       args: {
                         map_name: mapName
                       },
@@ -281,7 +292,7 @@ export const Bottom = ({
                   sendMessage(
                     {
                       op: "call_service",
-                      service: "/control_launch",
+                      service: CONTROL_LAUNCH_SERVICE,
                       args: {
                         launch_type: "mapping",
                         action: "stop",
@@ -289,6 +300,16 @@ export const Bottom = ({
                       },
                     }
                   )
+                  sendMessage({
+                    op: "call_service",
+                    service: CONTROL_LAUNCH_SERVICE,
+                    args: {
+                      launch_type: "car_vel",
+                      action: "start",
+                      package_name: "car_vel"
+                    },
+                    id: CONTROL_LAUNCH_SERVICE
+                  });
                   setMode("navigation");
                 }
               }}

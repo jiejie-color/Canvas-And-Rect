@@ -1,16 +1,16 @@
-import type { MapMessage } from "../../../type";
+import type { Map_Message } from "../../../type/topicRespon";
 import type { Coord } from "../hooks/usePanZoom";
 
 export const drawGrid = (
   ctx: CanvasRenderingContext2D,
-  mapData: MapMessage,
+  mapData: Map_Message,
   worldToCanvas: Coord["worldToCanvas"],
   scale: number,
   baseGridSize = 1
 ) => {
   if (!mapData) return;
 
-  const { width, height, resolution, origin } = mapData.info;
+  const { width, height, resolution, origin } = mapData.msg.info;
 
   const mapW = width * resolution;
   const mapH = height * resolution;

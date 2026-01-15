@@ -1,47 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import type { MySendMessage } from '../../type';
+import { CURRENT_MAP_INFO_TOPIC, DELETE_MAP_SERVICE, GET_MAP_LIST_SERVICE, LIST_WAYPOINTS_SERVICE, SWITCH_MAP_SERVICE } from '../../hooks/topic';
+import { useWebSocketContext } from '../../hooks/useWebSocket';
+import type { Current_Map_Info_Message, Get_Map_List_Message } from '../../type/topicRespon';
 
 interface SettingsProps {
     onClose: () => void;
-    currentMapWsUrl: string;
-    currentRobotWsUrl: string;
-    onReconnect: (mapWsUrl: string, robotWsUrl: string) => void;
-    mySendMessage: MySendMessage,
-    mapList: string[],
-    curMap: string,
 }
 
 const Settings: React.FC<SettingsProps> = ({
     onClose,
-    currentMapWsUrl,
-    currentRobotWsUrl,
-    onReconnect,
-    mySendMessage,
-    mapList,
-    curMap,
 }) => {
-    const [activeTab, setActiveTab] = useState('connection');
-    const [tempMapWsUrl, setTempMapWsUrl] = useState<string>(currentMapWsUrl);
-    const [tempRobotWsUrl, setTempRobotWsUrl] = useState<string>(currentRobotWsUrl);
-    const [tempCurMap, setTempCurMap] = useState<string>(curMap);
+    const [activeTab, setActiveTab] = useState('mapList');
+    const [curMap, setCurMap] = useState<string>('');
     const [localLoading, setLocalLoading] = useState(false); // 本地加载状态
-
+    const [mapList, setMapList] = useState<string[]>([]);
+    const { sendMessage, emitter } = useWebSocketContext();
     const handleSave = async () => {
-        if (activeTab === 'connection') {
-            onReconnect(tempMapWsUrl, tempRobotWsUrl);
-        }
         if (activeTab === "mapList") {
             // 设置全局和本地加载状态
             setLocalLoading(true);
-
             try {
-                mySendMessage(
+                sendMessage(
                     {
                         "op": "call_service",
-                        "service": "/switch_map",
-                        "id": "switch_map",
+                        "service": SWITCH_MAP_SERVICE,
+                        "id": SWITCH_MAP_SERVICE,
                         "args": {
-                            "map_name": tempCurMap
+                            "map_name": curMap
                         },
                     }
                 );
@@ -51,10 +36,10 @@ const Settings: React.FC<SettingsProps> = ({
                 setTimeout(() => {
                     setLocalLoading(false);
                     onClose();
-                    mySendMessage({
+                    sendMessage({
                         op: "call_service",
-                        id: "call_list_waypoints_1",
-                        service: "/list_waypoints",
+                        id: LIST_WAYPOINTS_SERVICE,
+                        service: LIST_WAYPOINTS_SERVICE,
                     });
                 }, 10000);
             }
@@ -62,14 +47,28 @@ const Settings: React.FC<SettingsProps> = ({
     };
 
     useEffect(() => {
-        mySendMessage(
+        sendMessage(
             {
                 "op": "call_service",
-                "service": "/get_map_list",
-                "id": "get_map_list"
+                "service": GET_MAP_LIST_SERVICE,
+                "id": GET_MAP_LIST_SERVICE,
             }
         )
-    }, [mySendMessage]);
+
+        // const unregisterMapList = registerCallback("/get_map_list", (res) => setMapList(res.values.map_names ?? []));
+        const handleMapList = (res: Get_Map_List_Message) => setMapList(res.values.map_names ?? []);
+        emitter.on(GET_MAP_LIST_SERVICE, handleMapList);
+
+        const handleCurrentMapInfo = (res: Current_Map_Info_Message) => {
+            setCurMap(res.msg.map_name)
+            emitter.off(CURRENT_MAP_INFO_TOPIC, handleCurrentMapInfo);
+        };
+        emitter.on(CURRENT_MAP_INFO_TOPIC, handleCurrentMapInfo);
+        return () => {
+            emitter.off(GET_MAP_LIST_SERVICE, handleMapList);
+            emitter.off(CURRENT_MAP_INFO_TOPIC, handleCurrentMapInfo);
+        }
+    }, [emitter, sendMessage]);
 
     return (
         <div
@@ -151,22 +150,6 @@ const Settings: React.FC<SettingsProps> = ({
                     borderTopRightRadius: 8,
                 }}>
                     <button
-                        onClick={() => setActiveTab('connection')}
-                        style={{
-                            flex: 1,
-                            padding: '12px 16px',
-                            border: 'none',
-                            background: activeTab === 'connection' ? '#3a3a3a' : 'transparent',
-                            color: activeTab === 'connection' ? '#fff' : '#aaa',
-                            cursor: 'pointer',
-                            fontSize: 14,
-                            fontWeight: activeTab === 'connection' ? 'bold' : 'normal',
-                            borderTopLeftRadius: 8,
-                        }}
-                    >
-                        连接设置
-                    </button>
-                    <button
                         onClick={() => setActiveTab('mapList')}
                         style={{
                             flex: 1,
@@ -186,56 +169,6 @@ const Settings: React.FC<SettingsProps> = ({
 
                 {/* Tab 内容区域 */}
                 <div style={{ padding: '20px' }}>
-                    {activeTab === 'connection' && (
-                        <>
-                            <h3 style={{ margin: '0 0 20px 0', color: '#fff', borderBottom: '1px solid #444', paddingBottom: '10px' }}>
-                                WebSocket连接设置
-                            </h3>
-
-                            <div style={{ marginBottom: 15 }}>
-                                <label style={{ display: 'block', marginBottom: 5, color: '#ccc' }}>
-                                    地图服务WebSocket地址:
-                                </label>
-                                <input
-                                    type="text"
-                                    value={tempMapWsUrl}
-                                    onChange={(e) => setTempMapWsUrl(e.target.value)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        border: '1px solid #444',
-                                        borderRadius: 4,
-                                        backgroundColor: '#333',
-                                        color: '#fff',
-                                        fontSize: 14,
-                                    }}
-                                    placeholder="例如: ws://192.168.0.155:9090"
-                                />
-                            </div>
-
-                            <div style={{ marginBottom: 20 }}>
-                                <label style={{ display: 'block', marginBottom: 5, color: '#ccc' }}>
-                                    机器人控制WebSocket地址:
-                                </label>
-                                <input
-                                    type="text"
-                                    value={tempRobotWsUrl}
-                                    onChange={(e) => setTempRobotWsUrl(e.target.value)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        border: '1px solid #444',
-                                        borderRadius: 4,
-                                        backgroundColor: '#333',
-                                        color: '#fff',
-                                        fontSize: 14,
-                                    }}
-                                    placeholder="例如: ws://192.168.0.155:8765"
-                                />
-                            </div>
-                        </>
-                    )}
-
                     {activeTab === 'mapList' && (
                         <>
                             <h3 style={{ margin: '0 0 20px 0', color: '#fff', borderBottom: '1px solid #444', paddingBottom: '10px' }}>
@@ -244,7 +177,7 @@ const Settings: React.FC<SettingsProps> = ({
 
                             <div style={{ marginBottom: 15 }}>
                                 <label style={{ display: 'block', marginBottom: 5, color: '#ccc' }}>
-                                    当前地图: {tempCurMap}
+                                    当前地图: {curMap}
                                 </label>
                             </div>
                             <div style={{ marginTop: 20 }}>
@@ -264,7 +197,7 @@ const Settings: React.FC<SettingsProps> = ({
                                             <div>
                                                 <button
                                                     onClick={() => {
-                                                        setTempCurMap(item)
+                                                        setCurMap(item)
                                                     }}
                                                     style={{
                                                         backgroundColor: '#007bff',
@@ -279,19 +212,19 @@ const Settings: React.FC<SettingsProps> = ({
                                                     onClick={(e) => {
                                                         e.preventDefault();
                                                         if (window.confirm(`确定要删除地图 "${item}" 吗？此操作不可撤销。`)) {
-                                                            mySendMessage({
+                                                            sendMessage({
                                                                 op: 'call_service',
-                                                                service: '/delete_map',
+                                                                service: DELETE_MAP_SERVICE,
                                                                 args: {
                                                                     map_name: item,
                                                                 },
-                                                                id: 'delete_map',
+                                                                id: DELETE_MAP_SERVICE,
                                                             });
-                                                            mySendMessage(
+                                                            sendMessage(
                                                                 {
                                                                     "op": "call_service",
-                                                                    "service": "/get_map_list",
-                                                                    "id": "get_map_list"
+                                                                    "service": GET_MAP_LIST_SERVICE,
+                                                                    "id": GET_MAP_LIST_SERVICE
                                                                 }
                                                             )
                                                         }
@@ -350,7 +283,7 @@ const Settings: React.FC<SettingsProps> = ({
                             opacity: localLoading ? 0.7 : 1,
                         }}
                     >
-                        {localLoading ? '切换中...' : (activeTab === 'connection' ? '保存并重启连接' : '保存设置')}
+                        {localLoading ? '切换中...' : ('保存设置')}
                     </button>
                 </div>
             </div>

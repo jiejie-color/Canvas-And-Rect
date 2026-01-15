@@ -12,8 +12,8 @@ export const drawMap = (
   ctx.fillStyle = "#303030";
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  const { width, height, resolution, origin } = mapData.info;
-  const data = mapData.data;
+  const { width, height, resolution, origin } = mapData.msg.info;
+  const data = mapData.msg.data;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const v = data[y * width + x];

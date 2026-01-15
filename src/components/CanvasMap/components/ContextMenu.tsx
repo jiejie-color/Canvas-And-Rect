@@ -4,6 +4,7 @@ import { hitTestWaypoint } from "../utils/hitTest";
 import type { MySendMessage, Waypoint } from "../../../type";
 import type { Coord } from "../hooks/usePanZoom";
 import { getMouseCanvasPos } from "../utils";
+import { DELETE_WAYPOINT_SERVICE, LIST_WAYPOINTS_SERVICE, MULTI_NAVIGATE_SERVICE } from "../../../hooks/topic";
 interface Props {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   waypoints: Waypoint[];
@@ -71,6 +72,7 @@ export const ContextMenu = ({
 
     const move = (e: MouseEvent) => {
       const { x: cx, y: cy } = getMouseCanvasPos(e, canvas);
+      console.log(cx, cy);
       const hit = hitTestWaypoint(cx, cy, waypoints, coord.worldToCanvas);
       if (operatingState !== "addPoint" && operatingState !== "drag") {
         if (hit) {
@@ -107,23 +109,6 @@ export const ContextMenu = ({
             fontSize: 14,
           }}
         >
-          {/* {contextTarget.type === "empty" ? (
-            <div
-              style={{ padding: "8px 14px", cursor: "pointer" }}
-              onClick={async () => {
-                setEditingNode({
-                  x: contextMenu.wx,
-                  y: contextMenu.wy,
-                  theta: 0,
-                  name: "",
-                });
-                setIsEditingNode(true);
-                setContextMenu((m) => ({ ...m, visible: false }));
-              }}
-            >
-              ➕ 添加节点
-            </div>
-          ) : null} */}
           {contextTarget.type === "waypoint" ? (
             <>
               <div
@@ -133,8 +118,8 @@ export const ContextMenu = ({
                   sendMessage(
                     ({
                       op: "call_service",
-                      id: `call_multi_navigate_${Date.now()}`,
-                      service: "/multi_navigate",
+                      id: MULTI_NAVIGATE_SERVICE,
+                      service: MULTI_NAVIGATE_SERVICE,
                       args: {
                         waypoint_ids: [contextTarget.waypoint.id],
                       },
@@ -150,8 +135,8 @@ export const ContextMenu = ({
                   sendMessage(
                     ({
                       op: "call_service",
-                      id: `call_delete_waypoint_${Date.now()}`,
-                      service: "/delete_waypoint",
+                      id: DELETE_WAYPOINT_SERVICE,
+                      service: DELETE_WAYPOINT_SERVICE,
                       args: {
                         id: contextTarget.waypoint.id,
                       },
@@ -161,7 +146,7 @@ export const ContextMenu = ({
                     ({
                       op: "call_service",
                       id: `create_waypoint_${Date.now() + 1}`,
-                      service: "/list_waypoints",
+                      service: LIST_WAYPOINTS_SERVICE,
                       args: {},
                     })
                   );

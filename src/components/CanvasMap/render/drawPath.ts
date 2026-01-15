@@ -1,13 +1,13 @@
-import type { PathPlan } from "../../../type";
+import type { Plan_Message } from "../../../type/topicRespon";
 import type { Coord } from "../hooks/usePanZoom";
 
 export const drawPath = (
     ctx: CanvasRenderingContext2D,
-    pathPlan: PathPlan | null,
+    plan: Plan_Message | undefined,
     worldToCanvas: Coord["worldToCanvas"]
 ) => {
-    if (!pathPlan) return
-    const poses = pathPlan.poses;
+    if (!plan) return
+    const poses = plan.msg.poses;
     const points = poses.map(p => ({
         x: p.pose.position.x,
         y: p.pose.position.y

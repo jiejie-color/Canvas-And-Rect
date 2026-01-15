@@ -1,15 +1,6 @@
-import type { MapMessage, Robot, Waypoint, LaserScan, MySendMessage, PathPlan } from "../../type";
+import type { Waypoint, } from "../../type";
 
-export interface CanvasMapProps {
-  mapData: MapMessage | null;
-  projected_map: MapMessage | null;
-  robot: Robot;
-  baseGridSize?: number;
-  sendMessage: MySendMessage;
-  waypoints: Waypoint[];
-  laserScan: LaserScan | null;
-  pathPlan: PathPlan | null; // 新增路径规划属性
-}
+
 export interface Offset {
   x: number;
   y: number;

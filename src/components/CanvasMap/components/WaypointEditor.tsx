@@ -1,3 +1,4 @@
+import { CREATE_WAYPOINT_SERVICE, LIST_WAYPOINTS_SERVICE } from "../../../hooks/topic";
 import type { MySendMessage, Waypoint } from "../../../type";
 
 interface Props {
@@ -22,8 +23,8 @@ export const WaypointEditor = ({
     sendMessage(
       ({
         op: "call_service",
-        id: `create_waypoint_${Date.now()}`,
-        service: "/create_waypoint",
+        id: CREATE_WAYPOINT_SERVICE,
+        service: CREATE_WAYPOINT_SERVICE,
         args: {
           waypoint: {
             x: editingNode.x,
@@ -37,8 +38,8 @@ export const WaypointEditor = ({
     sendMessage(
       ({
         op: "call_service",
-        id: `create_waypoint_${Date.now() + 1}`,
-        service: "/list_waypoints",
+        id: LIST_WAYPOINTS_SERVICE,
+        service: LIST_WAYPOINTS_SERVICE,
         args: {},
       })
     );
