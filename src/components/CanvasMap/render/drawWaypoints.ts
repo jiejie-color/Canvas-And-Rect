@@ -5,7 +5,6 @@ export const drawWaypoints = (
   ctx: CanvasRenderingContext2D,
   waypoints: Waypoint[],
   worldToCanvas: Coord["worldToCanvas"],
-  mapRotation: number
 ) => {
   // 绘制 Waypoints
   waypoints.forEach((p) => {
@@ -19,7 +18,6 @@ export const drawWaypoints = (
 
     ctx.save();
     ctx.translate(cx + 8, cy - 8);
-    ctx.rotate(-mapRotation);
     ctx.translate(-(cx + 8), -(cy - 8));
     ctx.fillStyle = "#000";
     ctx.font = "12px sans-serif";

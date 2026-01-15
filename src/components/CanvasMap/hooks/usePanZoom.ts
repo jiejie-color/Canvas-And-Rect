@@ -40,44 +40,37 @@ export const usePanZoom = (
   const lastMouse = useRef({ x: 0, y: 0 });
   const coord = useMemo<Coord>(() => {
     const worldToCanvas = (wx: number, wy: number) => {
-      // 仅做 scale/offset 转换
-      // ctx 的变换链会处理 mapRotation，所以这里不需要考虑旋转
+      // 在 worldToCanvas 中处理 mapRotation
+      const cos = Math.cos(mapRotation);
+      const sin = Math.sin(mapRotation);
+
+      // 先旋转世界坐标
+      const rotatedX = wx * cos - wy * sin;
+      const rotatedY = wx * sin + wy * cos;
+
+      // 再做 scale/offset 转换
       return {
-        x: wx * view.scale + view.offset.x,
-        y: -wy * view.scale + view.offset.y,
+        x: rotatedX * view.scale + view.offset.x,
+        y: -rotatedY * view.scale + view.offset.y,
       };
     };
 
     const canvasToWorld = (px: number, py: number) => {
-      const canvas = canvasRef.current;
-      let ux = px;
-      let uy = py;
+      // 先做 scale/offset 逆转换
+      const scaledX = (px - view.offset.x) / view.scale;
+      const scaledY = -(py - view.offset.y) / view.scale;
 
-      if (canvas) {
-        // 点击坐标需要逆旋转，因为 ctx 被旋转了但点击坐标没有
-        const cx = canvas.clientWidth / 2;
-        const cy = canvas.clientHeight / 2;
-        const dx = px - cx;
-        const dy = py - cy;
-        const cos = Math.cos(-mapRotation);  // 逆旋转角度
-        const sin = Math.sin(-mapRotation);
-
-        // 逆旋转点击坐标
-        const invx = dx * cos - dy * sin;
-        const invy = dx * sin + dy * cos;
-
-        ux = cx + invx;
-        uy = cy + invy;
-      }
-
+      // 再做逆旋转
+      const cos = Math.cos(-mapRotation);
+      const sin = Math.sin(-mapRotation);
       return {
-        x: (ux - view.offset.x) / view.scale,
-        y: -(uy - view.offset.y) / view.scale,
+        x: scaledX * cos - scaledY * sin,
+        y: scaledX * sin + scaledY * cos,
       };
     };
 
     return { worldToCanvas, canvasToWorld };
-  }, [view, mapRotation, canvasRef]);
+  }, [view, mapRotation]);
 
   // Zoom
   useEffect(() => {
@@ -184,14 +177,9 @@ export const usePanZoom = (
         const { x: currentX, y: currentY } = getClientPos(e);
         const dx = currentX - lastMouse.current.x;
         const dy = currentY - lastMouse.current.y;
-        // 根据 mapRotation 旋转拖拽向量
-        const cos = Math.cos(-mapRotation);
-        const sin = Math.sin(-mapRotation);
-        const dx_rot = dx * cos - dy * sin;
-        const dy_rot = dx * sin + dy * cos;
         setView((v) => ({
           ...v,
-          offset: { x: v.offset.x + dx_rot, y: v.offset.y + dy_rot },
+          offset: { x: v.offset.x + dx, y: v.offset.y + dy },
         }));
         lastMouse.current = { x: currentX, y: currentY };
       } else if (
@@ -202,25 +190,9 @@ export const usePanZoom = (
         /** 旋转箭头 */
         setEditingNode((node) => {
           if (!node) return null;
-          const canvas = canvasRef.current;
           const { x: cx, y: cy } = coord.worldToCanvas(node.x, node.y);
-
-          // 需要对鼠标坐标进行逆旋转，因为屏幕坐标没有经过 ctx 旋转
-          let mx = x;
-          let my = y;
-          if (canvas) {
-            const centerX = canvas.clientWidth / 2;
-            const centerY = canvas.clientHeight / 2;
-            const dx = x - centerX;
-            const dy = y - centerY;
-            const cos = Math.cos(-mapRotation);
-            const sin = Math.sin(-mapRotation);
-            mx = centerX + (dx * cos - dy * sin);
-            my = centerY + (dx * sin + dy * cos);
-          }
-
-          const dx = mx - cx;
-          const dy = cy - my;
+          const dx = x - cx;
+          const dy = cy - y;
           const theta = Math.atan2(dy, dx);
           return { ...node, theta };
         });
@@ -235,7 +207,7 @@ export const usePanZoom = (
         const dy = centerY - my;
         const currentTheta = Math.atan2(dy, dx);
         const deltaTheta = currentTheta - lastMouse.current.x;
-        setMapRotation((prev) => prev - deltaTheta);
+        setMapRotation((prev) => prev + deltaTheta);
         lastMouse.current.x = currentTheta;
       } else if (operatingState === "freeErase") {
         if (!isFreeDrawing.current) return;
@@ -243,7 +215,7 @@ export const usePanZoom = (
         setFreePoints((prev) => [...prev, { x, y }]);
       }
     },
-    [canvasRef, operatingState, mapRotation, setEditingNode, coord, setMapRotation, setFreePoints]
+    [canvasRef, operatingState, setEditingNode, coord, setMapRotation, setFreePoints]
   );
   const worldToMapIndex = useCallback((wx: number, wy: number) => {
     const { resolution, origin, width, height } = mapData!.msg.info;
@@ -318,22 +290,21 @@ export const usePanZoom = (
       } else if (operatingState === "rotate") {
         isRotating.current = false;
       } else if (operatingState === "addPoint") {
-        // 第二次点击：确定方向，完成添加
         setOperatingState("");
         setIsEditingNode(true);
       } else if (operatingState === "setInitialPose") {
-        // 第二次点击：确定方向，完成设置初始位置
+        if (!editingNode) return;
         setOperatingState("");
         sendMessage({
           op: "call_service",
           service: INITIAL_POSE_SERVICE,
           args: {
-            x: editingNode!.x,
-            y: editingNode!.y,
+            x: editingNode.x,
+            y: editingNode.y,
             z: 0,
             roll: 0,
             pitch: 0,
-            yaw: editingNode!.theta,
+            yaw: editingNode.theta,
           },
         });
         setEditingNode(null);

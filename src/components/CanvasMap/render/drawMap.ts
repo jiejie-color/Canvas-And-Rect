@@ -1,9 +1,9 @@
-import type { MapMessage } from "../../../type";
+import type { Map_Message } from "../../../type/topicRespon";
 import type { Coord } from "../hooks/usePanZoom";
 
 export const drawMap = (
   ctx: CanvasRenderingContext2D,
-  mapData: MapMessage | null,
+  mapData: Map_Message | null,
   worldToCanvas: Coord["worldToCanvas"],
   scale: number
 ) => {

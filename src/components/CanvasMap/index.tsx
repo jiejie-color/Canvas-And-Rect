@@ -55,18 +55,13 @@ const CanvasMap = () => {
     if (!ctx) return;
     ctx.clearRect(0, 0, ctx.canvas.clientWidth, ctx.canvas.clientHeight);
 
-    ctx.save();
-    ctx.translate(ctx.canvas.clientWidth / 2, ctx.canvas.clientHeight / 2);
-    ctx.rotate(mapRotation);
-    ctx.translate(-ctx.canvas.clientWidth / 2, -ctx.canvas.clientHeight / 2);
-
     drawMap(ctx, mode === "navigation" ? mapData : projected_map, coord.worldToCanvas, view.scale,);
     drawRobot(ctx, robot, coord.worldToCanvas, view.scale);
     if (laserScan && isLaser) {
       drawLaserScan(ctx, laserScan, coord.worldToCanvas, robot);
     }
     if (mode === "navigation") {
-      drawWaypoints(ctx, waypoints, coord.worldToCanvas, mapRotation);
+      drawWaypoints(ctx, waypoints, coord.worldToCanvas,);
       drawPath(ctx, plan, coord.worldToCanvas); // 绘制路径规划
       if (operatingState === "addPoint" || operatingState === "setInitialPose") {
         drawArrow(ctx, editingNode, coord);
