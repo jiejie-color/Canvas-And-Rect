@@ -1,7 +1,9 @@
 import type { OperatingState } from "../CanvasMap/types";
 import type { Mode, } from "../../type";
 import { useWebSocketContext } from "../../hooks/useWebSocket";
-import { CONTROL_LAUNCH_SERVICE, MAP_SAVE_SERVICE, PLAN_TOPIC, PROJECTED_MAP_TOPIC, SCAN_TOPIC } from "../../hooks/topic";
+import { CONTROL_LAUNCH_SERVICE, MAP_SAVE_SERVICE, PLAN_TOPIC, PROJECTED_MAP_TOPIC, SAVE_EDITED_MAPS_SERVICE, SCAN_TOPIC } from "../../hooks/topic";
+import type { Save_Edited_Maps_Message } from "../../type/topicRespon";
+import { useCallback, useEffect } from "react";
 
 export const Bottom = ({
   canvasRef,
@@ -28,7 +30,24 @@ export const Bottom = ({
   isRobotControls: boolean;
   setIsRobotControls: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
-  const { sendMessage, } = useWebSocketContext();
+  const { sendMessage, curEditMap, emitter } = useWebSocketContext();
+
+
+  const handleSaveEditedMaps = useCallback((res: Save_Edited_Maps_Message) => {
+    if (res.values.success) {
+      alert("地图保存成功");
+    } else {
+      alert("地图保存失败");
+    }
+  }, [])
+
+  useEffect(() => {
+    emitter.on(SAVE_EDITED_MAPS_SERVICE, handleSaveEditedMaps)
+    return () => {
+      emitter.off(SAVE_EDITED_MAPS_SERVICE, handleSaveEditedMaps)
+    }
+  }, [emitter, handleSaveEditedMaps])
+
   return (
     <>
       <div
@@ -267,21 +286,30 @@ export const Bottom = ({
             style={{ padding: 12, marginRight: 20 }}
             onClick={() => {
               const canvas = canvasRef.current;
-              if (operatingState !== "freeErase") {
+              if (operatingState !== "addObstacles") {
                 canvas!.style.cursor = "pointer"; // 副作用：DOM操作
-                setOperatingState("freeErase"); // 状态更新
+                setOperatingState("addObstacles"); // 状态更新
               } else {
                 canvas!.style.cursor = ""; // 副作用：DOM操作
                 setOperatingState(""); // 状态更新
               }
             }}
           >
-            {operatingState === "freeErase" ? "取消添加障碍" : "添加障碍"}
+            {operatingState === "addObstacles" ? "取消添加障碍" : "添加障碍"}
           </button>
 
           <button
             style={{ padding: 12, marginLeft: 20 }}
-            onClick={() => { }}
+            onClick={() => {
+              sendMessage({
+                op: "call_service",
+                service: SAVE_EDITED_MAPS_SERVICE,
+                id: SAVE_EDITED_MAPS_SERVICE,
+                args: {
+                  map_name: curEditMap,
+                }
+              });
+            }}
           >
             保存
           </button>

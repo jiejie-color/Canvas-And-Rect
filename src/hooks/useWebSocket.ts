@@ -4,17 +4,17 @@ import {
     CONTROL_LAUNCH_SERVICE, CURRENT_MAP_INFO_TOPIC,
     GET_EDITED_MAPS_SERVICE,
     GET_MAP_LIST_SERVICE, LAUNCH_STATUS_TOPIC, LIST_WAYPOINTS_SERVICE, MAP_TOPIC,
-    NAVIGATION_STATUS_TOPIC, ODOMETRY_TOPIC, PLAN_TOPIC, PROJECTED_MAP_TOPIC, ROBOT_POSE_TOPIC, SCAN_TOPIC
+    NAVIGATION_STATUS_TOPIC, ODOMETRY_TOPIC, PLAN_TOPIC, PROJECTED_MAP_TOPIC, ROBOT_POSE_TOPIC, SAVE_EDITED_MAPS_SERVICE, SCAN_TOPIC
 } from './topic';
 import type {
     Control_Launch_Message, Current_Map_Info_Message,
     Get_Edited_Map_Message,
     Get_Map_List_Message, Launch_Status_Message, List_Waypoints_Message, Map_Message,
-    Navigation_Status_Message, Odometry_Message, Plan_Message, Robot_Bose_Message, Scan_Message
+    Navigation_Status_Message, Odometry_Message, Plan_Message, Robot_Bose_Message, Save_Edited_Maps_Message, Scan_Message
 } from '../type/topicRespon';
 
 // 定义每个主题对应的类型映射
-interface TopicTypeMap {
+export interface TopicTypeMap {
     [MAP_TOPIC]: Map_Message;
     [PROJECTED_MAP_TOPIC]: Map_Message;
     [ROBOT_POSE_TOPIC]: Robot_Bose_Message;
@@ -28,6 +28,7 @@ interface TopicTypeMap {
     [CONTROL_LAUNCH_SERVICE]: Control_Launch_Message; // 根据需要定义具体类型
     [ODOMETRY_TOPIC]: Odometry_Message; // 根据需要定义具体类型
     [GET_EDITED_MAPS_SERVICE]: Get_Edited_Map_Message;
+    [SAVE_EDITED_MAPS_SERVICE]: Save_Edited_Maps_Message
 }
 
 type ListenerMap = {
@@ -50,6 +51,7 @@ export class SimpleEventEmitter {
         [CONTROL_LAUNCH_SERVICE]: [],
         [ODOMETRY_TOPIC]: [],
         [GET_EDITED_MAPS_SERVICE]: [],
+        [SAVE_EDITED_MAPS_SERVICE]: [],
 
     };
 
@@ -88,6 +90,8 @@ interface WebSocketContextType {
     mapList: string[];
     mapData: Map_Message | null;
     setMapData: React.Dispatch<React.SetStateAction<Map_Message | null>>;
+    curEditMap: string;
+    setCurEditMap: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export const WebSocketContext = createContext<WebSocketContextType | null>(null);

@@ -101,5 +101,13 @@ export interface Get_Edited_Map_Message {
         message: string;
         success: boolean;
         image_data: number[];
+        origin: [number, number, number];
+        resolution: number;
+    }
+}
+export interface Save_Edited_Maps_Message {
+    values: {
+        success: boolean;
+        message: string;
     }
 }

@@ -16,4 +16,5 @@ export type OperatingState =
   | "rotate"
   | "addPoint"
   | "setInitialPose" // 拖动确定朝向
-  | "freeErase"; 
+  | "freeErase"
+  | 'addObstacles'; 

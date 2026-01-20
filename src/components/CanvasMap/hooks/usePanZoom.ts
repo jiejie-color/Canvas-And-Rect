@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Waypoint } from "../../../type";
 import type { Offset, OperatingState } from "../types";
 import { getMouseCanvasPos, getTouchCanvasPos, getClientPos } from "../utils";
-import { CURRENT_MAP_INFO_TOPIC, INITIAL_POSE_SERVICE, SAVE_EDITED_MAPS_SERVICE, SET_MAP_PIXEL_INDICES_SERVICE } from "../../../hooks/topic";
-import type { Current_Map_Info_Message, Map_Message } from "../../../type/topicRespon";
+import { GET_EDITED_MAPS_SERVICE, INITIAL_POSE_SERVICE, SET_MAP_PIXEL_INDICES_SERVICE } from "../../../hooks/topic";
+import type { Map_Message } from "../../../type/topicRespon";
 import { useWebSocketContext } from "../../../hooks/useWebSocket";
 
 export interface Coord {
@@ -28,12 +28,11 @@ export const usePanZoom = (
   setFreePoints: React.Dispatch<React.SetStateAction<{ x: number; y: number }[]>>,
   freePoints: { x: number; y: number }[]
 ) => {
-  const { sendMessage, emitter } = useWebSocketContext();
+  const { sendMessage, curEditMap } = useWebSocketContext();
   const [view, setView] = useState<View>({
     scale: 1,
     offset: { x: 0, y: 0 },
   });
-  // const setFreePoints = useRef<{ x: number; y: number }[]>([]);
   const isFreeDrawing = useRef(false);
 
   const isDragging = useRef(false);
@@ -142,7 +141,7 @@ export const usePanZoom = (
         const dx = mx - centerX;
         const dy = centerY - my;
         lastMouse.current = { x: Math.atan2(dy, dx), y: 0 }; // 记录初始角度
-      } else if (operatingState === "freeErase") {
+      } else if (operatingState === "freeErase" || operatingState === 'addObstacles') {
         let pos;
         if (e instanceof TouchEvent) {
           pos = getTouchCanvasPos(e, canvas!);
@@ -210,7 +209,7 @@ export const usePanZoom = (
         const deltaTheta = currentTheta - lastMouse.current.x;
         setMapRotation((prev) => prev + deltaTheta);
         lastMouse.current.x = currentTheta;
-      } else if (operatingState === "freeErase") {
+      } else if (operatingState === "freeErase" || operatingState === 'addObstacles') {
         if (!isFreeDrawing.current) return;
 
         setFreePoints((prev) => [...prev, { x, y }]);
@@ -228,6 +227,24 @@ export const usePanZoom = (
 
     return my * width + mx;
   }, [mapData]);
+  const sendEraseToROS = useCallback((indices: number[]) => {
+    sendMessage({
+      op: "call_service",
+      service: SET_MAP_PIXEL_INDICES_SERVICE,
+      args: {
+        indices,
+        map_name: curEditMap,
+        pixel_value: operatingState === 'addObstacles' ? 0 : 254,
+      }
+    });
+    sendMessage({
+      op: "call_service",
+      service: GET_EDITED_MAPS_SERVICE,
+      args: {
+        map_name: curEditMap
+      }
+    });
+  }, [sendMessage, curEditMap, operatingState]);
   const finalizeFreeErase = useCallback((canvas: HTMLCanvasElement) => {
     const polygon = freePoints;
     if (polygon.length < 3) return;
@@ -264,52 +281,12 @@ export const usePanZoom = (
         }
       }
     }
-    const sendEraseToROS = (indices: number[]) => {
-      const handleCurrentMapInfo = (res: Current_Map_Info_Message) => {
-        emitter.off(CURRENT_MAP_INFO_TOPIC, handleCurrentMapInfo);
-        sendMessage({
-          op: "call_service",
-          service: SET_MAP_PIXEL_INDICES_SERVICE,
-          args: {
-            indices,
-            map_name: res.msg.map_name,
-            pixel_value: 254,
-          }
-        });
-        setTimeout(() => {
-          sendMessage({
-            op: "call_service",
-            service: SAVE_EDITED_MAPS_SERVICE,
-            id: SAVE_EDITED_MAPS_SERVICE,
-            args: {
-              map_name: res.msg.map_name,
-            }
-          });
-          // sendMessage(
-          //   ({
-          //     op: "call_service",
-          //     service: CONTROL_LAUNCH_SERVICE,
-          //     args: {
-          //       launch_type: "car_vel",
-          //       action: "restart",
-          //       package_name: "car_vel"
-          //     },
-          //     id: CONTROL_LAUNCH_SERVICE
-          //   })
-          // )
-        }, 500)
-      };
-      emitter.on(CURRENT_MAP_INFO_TOPIC, handleCurrentMapInfo);
-    };
-    if (window.confirm(`你确定要擦除 ${indices.length} 个栅格吗？`)) {
-      sendEraseToROS(indices);
-    } else {
-      setFreePoints([]);
-      // console.log(indices)
-    }
 
-    // sendEraseToROS(indices);
-  }, [coord, emitter, freePoints, sendMessage, setFreePoints, worldToMapIndex]);
+    if (window.confirm(`你确定要 ${operatingState === 'addObstacles' ? '添加' : '擦除'} ${indices.length} 个栅格吗？`)) {
+      sendEraseToROS(indices);
+    }
+    setFreePoints([]);
+  }, [coord, freePoints, operatingState, sendEraseToROS, setFreePoints, worldToMapIndex]);
   const up = useCallback(
     (e: MouseEvent | TouchEvent) => {
       if (e instanceof TouchEvent) {
@@ -339,9 +316,11 @@ export const usePanZoom = (
           },
         });
         setEditingNode(null);
-      } else if (operatingState === "freeErase") {
-        isFreeDrawing.current = false;
-        finalizeFreeErase(canvasRef.current!);
+      } else if (operatingState === "freeErase" || operatingState === 'addObstacles') {
+        if (isFreeDrawing.current) {
+          finalizeFreeErase(canvasRef.current!);
+          isFreeDrawing.current = false;
+        }
       }
 
     },

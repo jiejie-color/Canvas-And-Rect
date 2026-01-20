@@ -52,28 +52,76 @@ const CanvasMap = () => {
   useEffect(() => {
     const ctx = ctxRef.current;
     if (!ctx) return;
+
+    // 清除画布
     ctx.clearRect(0, 0, ctx.canvas.clientWidth, ctx.canvas.clientHeight);
 
-    drawMap(ctx, mapData, coord.worldToCanvas, view.scale,);
-    if (mode !== "editing")
-      drawRobot(ctx, robot, coord.worldToCanvas, view.scale);
-    if (laserScan && isLaser) {
-      drawLaserScan(ctx, laserScan, coord.worldToCanvas, robot);
-    }
-    if (mode === "navigation") {
-      drawWaypoints(ctx, waypoints, coord.worldToCanvas,);
-      drawPath(ctx, plan, coord.worldToCanvas); // 绘制路径规划
-      if (operatingState === "addPoint" || operatingState === "setInitialPose") {
-        drawArrow(ctx, editingNode, coord);
-      }
-      if (operatingState === "freeErase") {
-        drawFreePoints(ctx, freePoints);
-      }
-    }
+    // 逐个渲染不同的图层
+    renderMapLayer(ctx);
+    renderRobotLayer(ctx);
+    renderLaserLayer(ctx);
+    renderNavigationLayer(ctx);
+    renderEditingLayer(ctx);
 
     ctx.restore();
-  }, [mapData, robot, laserScan, waypoints, plan, view, ctxRef, coord, editingNode, operatingState, mode, mapRotation, isLaser, freePoints]);
 
+    // 辅助函数定义
+    function renderMapLayer(context: CanvasRenderingContext2D) {
+      if (mapData) {
+        drawMap(context, mapData, coord.worldToCanvas, view.scale);
+      }
+    }
+
+    function renderRobotLayer(context: CanvasRenderingContext2D) {
+      if ((mode === "navigation" || mode === "mapping") && robot) {
+        drawRobot(context, robot, coord.worldToCanvas, view.scale);
+      }
+    }
+
+    function renderLaserLayer(context: CanvasRenderingContext2D) {
+      if (laserScan && isLaser && robot) {
+        drawLaserScan(context, laserScan, coord.worldToCanvas, robot);
+      }
+    }
+
+    function renderNavigationLayer(context: CanvasRenderingContext2D) {
+      if (mode === "navigation") {
+        if (waypoints) {
+          drawWaypoints(context, waypoints, coord.worldToCanvas);
+        }
+
+        if (plan && isPlan) {
+          drawPath(context, plan, coord.worldToCanvas);
+        }
+
+        if ((operatingState === "addPoint" || operatingState === "setInitialPose") && editingNode) {
+          drawArrow(context, editingNode, coord);
+        }
+      }
+    }
+
+    function renderEditingLayer(context: CanvasRenderingContext2D) {
+      if (mode === "editing" && (operatingState === "freeErase" || operatingState === "addObstacles")) {
+        console.log(freePoints);
+        drawFreePoints(context, freePoints);
+      }
+    }
+  }, [
+    mapData,
+    robot,
+    laserScan,
+    waypoints,
+    plan,
+    view,
+    ctxRef,
+    coord,
+    editingNode,
+    operatingState,
+    mode,
+    isLaser,
+    isPlan,
+    freePoints
+  ]);
   return (
     <>
       <Top></Top>

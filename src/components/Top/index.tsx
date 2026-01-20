@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useWebSocketContext } from "../../hooks/useWebSocket";
 import { CONTROL_LAUNCH_SERVICE, CURRENT_MAP_INFO_TOPIC, GET_EDITED_MAPS_SERVICE, NAVIGATION_STATUS_TOPIC, PAUSE_NAVIGATION_SERVICE, PROJECTED_MAP_TOPIC } from "../../hooks/topic";
 import type { Get_Edited_Map_Message, Navigation_Status_Message } from "../../type/topicRespon";
@@ -9,8 +9,7 @@ import type { Mode } from "../../type";
 export const Top = () => {
 
   const [navigationStatus, setNavigationStatus] = useState<Navigation_Status_Message>();
-  const { sendMessage, emitter, curMap, mode, setMode, mapList, setMapData } = useWebSocketContext();
-  const [curEditMap, setCurEditMap] = useState<string>();
+  const { sendMessage, emitter, curMap, mode, setMode, mapList, setMapData, curEditMap, setCurEditMap } = useWebSocketContext();
 
   useEffect(() => {
     const navigationStatusListener = (res: Navigation_Status_Message) => setNavigationStatus(res);
@@ -42,6 +41,8 @@ export const Top = () => {
 
   const toggleMode = (type: Mode) => {
     setMode(type);
+    setMapData(null)
+
     if (type === "mapping") {
       sendMessage(
         ({
@@ -70,13 +71,10 @@ export const Top = () => {
           args: {
             launch_type: "mapping",
             action: "stop",
-            package_name: "car_vel"
+            package_name: "mapping"
           },
         }
       )
-      sendMessage(
-        { op: "unsubscribe", topic: PROJECTED_MAP_TOPIC, id: PROJECTED_MAP_TOPIC }
-      );
       sendMessage({
         op: "call_service",
         service: CONTROL_LAUNCH_SERVICE,
@@ -87,39 +85,30 @@ export const Top = () => {
         },
         id: CONTROL_LAUNCH_SERVICE
       });
+    } else {
+      setCurEditMap("")
     }
   };
 
+  const handleGetEditedMaps = useCallback((res: Get_Edited_Map_Message) => {
+    setMapData({
+      msg: {
+        info: {
+          width: res.values.width,
+          height: res.values.height,
+          resolution: Number(res.values.resolution.toFixed(2)),
+          origin: { position: { x: Number(res.values.origin[0].toFixed(2)), y: Number(res.values.origin[1].toFixed(2)) } },
+        },
+        data: res.values.image_data
+      }
+    })
+  }, [setMapData]);
   useEffect(() => {
-    if (curEditMap) {
-      sendMessage({
-        op: "call_service",
-        service: GET_EDITED_MAPS_SERVICE,
-        args: {
-          map_name: curEditMap
-        }
-      });
-    }
-    const handleGetEditedMaps = (res: Get_Edited_Map_Message) => {
-      // setMapData({
-      //   msg: {
-      //     info: {
-      //       width: res.values.width,
-      //       height: res.values.height,
-      //       resolution: res.values.resolution,
-      //       origin: { position: { x: number; y: number } };
-      //     },
-      //     data: res.values.image_data
-      //   }
-      // })
-      // console.log("获取到编辑地图数据", res);
-    };
     emitter.on(GET_EDITED_MAPS_SERVICE, handleGetEditedMaps);
     return () => {
       emitter.off(GET_EDITED_MAPS_SERVICE, handleGetEditedMaps);
-    };
-  }
-    , [curEditMap, emitter, sendMessage])
+    }
+  }, [emitter, handleGetEditedMaps]);
   return (
     <>
       <div
@@ -163,15 +152,23 @@ export const Top = () => {
               选择地图:
               <select
                 name="mapList"
-                value={curEditMap || ''}
+                value={curEditMap}
                 onChange={(e) => {
                   // 当选择不同地图时，可以触发切换地图的操作
-                  if (e.target.value !== curMap) {
+                  if (e.target.value !== curEditMap) {
                     setCurEditMap(e.target.value);
+                    sendMessage({
+                      op: "call_service",
+                      service: GET_EDITED_MAPS_SERVICE,
+                      args: {
+                        map_name: e.target.value
+                      }
+                    });
                   }
                 }}
                 className={styles["map-select"]}
               >
+                <option value="">请选择地图</option>
                 {mapList.map((mapName) => (
                   <option key={mapName} value={mapName}>
                     {mapName}
