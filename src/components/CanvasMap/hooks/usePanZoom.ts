@@ -28,7 +28,7 @@ export const usePanZoom = (
   setFreePoints: React.Dispatch<React.SetStateAction<{ x: number; y: number }[]>>,
   freePoints: { x: number; y: number }[]
 ) => {
-  const { sendMessage, curEditMap } = useWebSocketContext();
+  const { sendMessage, curEditMap, mode } = useWebSocketContext();
   const [view, setView] = useState<View>({
     scale: 1,
     offset: { x: 0, y: 0 },
@@ -359,7 +359,7 @@ export const usePanZoom = (
   }, [canvasRef, down, move, up]);
 
   const canvasInit = useCallback(() => {
-    if (!mapData || !canvasRef.current) return;
+    if (!mapData || !canvasRef.current || mode === 'editing') return;
 
     const canvas = canvasRef.current;
     const { width, height, resolution, origin } = mapData.msg.info;
@@ -379,7 +379,7 @@ export const usePanZoom = (
         },
       };
     });
-  }, [mapData, canvasRef]);
+  }, [mapData, canvasRef, mode]);
 
   //地图 初始化 自适应 居中 放大
   useEffect(() => {

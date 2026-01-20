@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, } from 'react';
+import React, { useCallback, useEffect, useRef, useState, } from 'react';
 import useWebSocket from 'react-use-websocket';
 import { WebSocketContext, SimpleEventEmitter, type TopicTypeMap } from '../../hooks/useWebSocket';
 import type { Mode, SendMessageParams } from '../../type';
@@ -15,11 +15,34 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     const [mode, setMode] = useState<Mode>(''); // 新增状态控制当前激活的模式
     const [mapList, setMapList] = useState<string[]>([]);
     const [curEditMap, setCurEditMap] = useState<string>("");
-
+    const fragmentCache = useRef(new Map<string, string[]>());
     const { sendMessage: wsSendMessage } = useWebSocket("ws://192.168.0.155:9090", {
         onMessage: (event) => {
             try {
                 const res = JSON.parse(event.data);
+                // ====== 处理分片 ======
+                if (res.op === "fragment") {
+                    const { num, total, data, id } = res;
+                    if (!fragmentCache.current.has(id)) {
+                        fragmentCache.current.set(id, []);
+                    }
+
+                    const arr = fragmentCache.current.get(id)!;
+                    arr[num] = data;
+                    if (arr.filter(Boolean).length === total) {
+                        const full = arr.join("");
+                        fragmentCache.current.delete(id);
+
+                        const merged = JSON.parse(full);
+                        const topic = merged.topic || merged.service;
+
+                        if (topic) {
+                            emitter.emit(topic, merged);
+                        }
+                        console.log('合并完成:');
+                    }
+                    return;
+                }
                 const topic = res.topic || res.service;
                 if (topic) {
                     emitter.emit(topic, res);
@@ -68,7 +91,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         }
     }, [emitter, sendMessage]);
     useEffect(() => {
-        if (mode === 'editing') return
+        if (mode === 'editing' || mode === '') return
         const handleMapTopic = (res: Map_Message) => {
             setMapData(res)
         }

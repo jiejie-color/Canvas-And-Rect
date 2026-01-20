@@ -34,6 +34,7 @@ const CanvasMap = () => {
   const [freePoints, setFreePoints] = useState<{ x: number; y: number }[]>([]);
   const { sendMessage, mode, setMode, mapData, } = useWebSocketContext();
   const { robot, waypoints, laserScan, plan, } = useGetData();
+  const mapCacheRef = useRef<HTMLCanvasElement | null>(null);
 
   const { view, coord } = usePanZoom(
     canvasRef,
@@ -49,79 +50,71 @@ const CanvasMap = () => {
     freePoints,
   );
   const { ctxRef } = useCanvasInit(canvasRef, containerRef,);
+
   useEffect(() => {
-    const ctx = ctxRef.current;
-    if (!ctx) return;
+    if (!mapData || !ctxRef.current) return;
 
-    // 清除画布
-    ctx.clearRect(0, 0, ctx.canvas.clientWidth, ctx.canvas.clientHeight);
+    const base = document.createElement("canvas");
+    base.width = ctxRef.current.canvas.width;
+    base.height = ctxRef.current.canvas.height;
 
-    // 逐个渲染不同的图层
-    renderMapLayer(ctx);
-    renderRobotLayer(ctx);
-    renderLaserLayer(ctx);
-    renderNavigationLayer(ctx);
-    renderEditingLayer(ctx);
+    const baseCtx = base.getContext("2d")!;
+    baseCtx.clearRect(0, 0, base.width, base.height);
 
-    ctx.restore();
+    drawMap(baseCtx, mapData, coord.worldToCanvas, view.scale);
 
-    // 辅助函数定义
-    function renderMapLayer(context: CanvasRenderingContext2D) {
-      if (mapData) {
-        drawMap(context, mapData, coord.worldToCanvas, view.scale);
+    mapCacheRef.current = base;
+  }, [mapData, coord, view.scale, ctxRef]);
+
+  useEffect(() => {
+    let rafId: number;
+
+    const render = () => {
+      const ctx = ctxRef.current;
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+      // map layer
+      if (mapCacheRef.current) {
+        ctx.drawImage(mapCacheRef.current, 0, 0);
       }
-    }
 
-    function renderRobotLayer(context: CanvasRenderingContext2D) {
+      // robot
       if ((mode === "navigation" || mode === "mapping") && robot) {
-        drawRobot(context, robot, coord.worldToCanvas, view.scale);
+        drawRobot(ctx, robot, coord.worldToCanvas, view.scale);
       }
-    }
 
-    function renderLaserLayer(context: CanvasRenderingContext2D) {
+      // laser
       if (laserScan && isLaser && robot) {
-        drawLaserScan(context, laserScan, coord.worldToCanvas, robot);
+        drawLaserScan(ctx, laserScan, coord.worldToCanvas, robot);
       }
-    }
 
-    function renderNavigationLayer(context: CanvasRenderingContext2D) {
+      // navigation
       if (mode === "navigation") {
         if (waypoints) {
-          drawWaypoints(context, waypoints, coord.worldToCanvas);
+          drawWaypoints(ctx, waypoints, coord.worldToCanvas);
         }
-
         if (plan && isPlan) {
-          drawPath(context, plan, coord.worldToCanvas);
+          drawPath(ctx, plan, coord.worldToCanvas);
         }
-
         if ((operatingState === "addPoint" || operatingState === "setInitialPose") && editingNode) {
-          drawArrow(context, editingNode, coord);
+          console.log(editingNode);
+          drawArrow(ctx, editingNode, coord);
         }
       }
-    }
 
-    function renderEditingLayer(context: CanvasRenderingContext2D) {
-      if (mode === "editing" && (operatingState === "freeErase" || operatingState === "addObstacles")) {
-        console.log(freePoints);
-        drawFreePoints(context, freePoints);
+      // editing
+      if (mode === "editing") {
+        drawFreePoints(ctx, freePoints);
       }
-    }
-  }, [
-    mapData,
-    robot,
-    laserScan,
-    waypoints,
-    plan,
-    view,
-    ctxRef,
-    coord,
-    editingNode,
-    operatingState,
-    mode,
-    isLaser,
-    isPlan,
-    freePoints
-  ]);
+      rafId = requestAnimationFrame(render);
+    };
+
+    rafId = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(rafId);
+  }, [coord, ctxRef, editingNode, freePoints, isLaser, isPlan, laserScan, mode, operatingState, plan, robot, view.scale, waypoints]);
+
   return (
     <>
       <Top></Top>

@@ -19,7 +19,7 @@ export const drawWaypoints = (
     ctx.save();
     ctx.translate(cx + 8, cy - 8);
     ctx.translate(-(cx + 8), -(cy - 8));
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = "red";
     ctx.font = "12px sans-serif";
     ctx.fillText(p.name, cx + 8, cy - 8);
     ctx.restore();
